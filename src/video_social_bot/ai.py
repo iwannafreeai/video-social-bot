@@ -1,9 +1,12 @@
+import logging
 from pathlib import Path
 
 from openai import AsyncOpenAI
 
 from video_social_bot.config import Settings
 from video_social_bot.enums import CaptionLanguage
+
+logger = logging.getLogger(__name__)
 
 
 class TranscriptionClient:
@@ -15,13 +18,16 @@ class TranscriptionClient:
         self._client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     async def transcribe(self, audio_path: Path) -> str:
+        logger.info("Starting Whisper transcription: %s", audio_path)
         with audio_path.open("rb") as audio_file:
             result = await self._client.audio.transcriptions.create(
                 model=self._settings.whisper_model,
                 file=audio_file,
                 response_format="text",
             )
-        return str(result).strip()
+        transcript = str(result).strip()
+        logger.info("Whisper transcription complete: chars=%s", len(transcript))
+        return transcript
 
 
 class CaptionClient:
@@ -42,6 +48,12 @@ class CaptionClient:
         extra_context: str = "",
     ) -> str:
         language_name = "Russian" if language == CaptionLanguage.RU else "English"
+        logger.info(
+            "Generating caption: model=%s language=%s transcript_chars=%s",
+            self._settings.llm_model,
+            language,
+            len(transcript),
+        )
         headers: dict[str, str] = {}
         if self._settings.llm_http_referer:
             headers["HTTP-Referer"] = self._settings.llm_http_referer
@@ -77,4 +89,6 @@ class CaptionClient:
         if not content:
             msg = "LLM returned an empty caption"
             raise RuntimeError(msg)
-        return content.strip()
+        caption = content.strip()
+        logger.info("Caption generated: chars=%s", len(caption))
+        return caption
