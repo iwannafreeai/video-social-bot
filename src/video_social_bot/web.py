@@ -75,8 +75,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     session_factory = create_session_factory(engine)
     state.settings = settings
     state.session_factory = session_factory
-    state.worker = JobWorker(settings, session_factory)
-    state.worker_task = asyncio.create_task(state.worker.run_forever())
+    if settings.web_worker_enabled:
+        state.worker = JobWorker(settings, session_factory)
+        state.worker_task = asyncio.create_task(state.worker.run_forever())
     yield
     if state.worker is not None:
         state.worker.stop()

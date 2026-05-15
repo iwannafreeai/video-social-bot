@@ -16,13 +16,72 @@ MVP для Telegram-бота и лёгкого FastAPI-дэшборда:
 
 ## Требования
 
+Для Docker-запуска:
+
+- Docker
+- Docker Compose v2
+
+Для ручного запуска:
+
 - Python 3.12+
 - FFmpeg и FFprobe
+
+Для работы приложения:
+
 - Telegram bot token
 - OpenAI API key для Whisper
 - LLM API key: OpenRouter по умолчанию или любой совместимый с OpenAI Chat Completions API
 
-## Установка
+## Быстрый запуск через Docker
+
+```bash
+git clone https://github.com/iwannafreeai/video-social-bot.git
+cd video-social-bot
+cp .env.example .env
+```
+
+Заполнить `.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=...
+OPENAI_API_KEY=...
+LLM_API_KEY=...
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=strong-password
+SECRET_KEY=random-long-secret
+DATABASE_URL=sqlite+aiosqlite:////app/data/app.db
+STORAGE_DIR=/app/storage
+WEB_WORKER_ENABLED=false
+```
+
+Собрать и запустить:
+
+```bash
+docker compose up -d --build
+```
+
+Открыть дэшборд:
+
+```text
+http://SERVER_IP:8000
+```
+
+Логи:
+
+```bash
+docker compose logs -f web
+docker compose logs -f bot
+```
+
+Остановить:
+
+```bash
+docker compose down
+```
+
+Данные SQLite и видео хранятся в Docker volumes `app-data` и `app-storage`.
+
+## Ручная установка без Docker
 
 ```bash
 cd /home/ubuntu/video-social-bot
@@ -52,14 +111,14 @@ LLM_MODEL=openai/gpt-4o-mini
 
 Для другого провайдера поменять `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`.
 
-## Инициализация
+## Ручная инициализация
 
 ```bash
 . .venv/bin/activate
 python -m video_social_bot.cli
 ```
 
-## Запуск дэшборда
+## Ручной запуск дэшборда
 
 ```bash
 . .venv/bin/activate
@@ -72,7 +131,7 @@ uvicorn video_social_bot.web:app --host 0.0.0.0 --port 8000
 http://SERVER_IP:8000
 ```
 
-## Запуск Telegram-бота
+## Ручной запуск Telegram-бота
 
 В другом процессе:
 
@@ -86,11 +145,11 @@ python -m video_social_bot.bot
 В MVP используется простой встроенный worker:
 
 - в боте worker запускается вместе с polling;
-- в веб-приложении worker запускается вместе с FastAPI;
+- в веб-приложении worker запускается вместе с FastAPI только при `WEB_WORKER_ENABLED=true`;
 - обрабатывается одно видео за раз, что подходит для VPS 1 vCPU / 4 GB RAM;
 - просроченные файлы и задачи удаляются после `FILE_TTL_HOURS`.
 
-На production лучше запускать только один активный worker, чтобы два процесса не взяли одну задачу одновременно. Простой вариант: использовать Telegram-бот как worker, а у веб-дашборда позже отключить worker флагом.
+На production лучше запускать только один активный worker, чтобы два процесса не взяли одну задачу одновременно. В Docker Compose worker работает в сервисе `bot`, а дэшборд только создаёт задачи.
 
 ## Проверки
 
