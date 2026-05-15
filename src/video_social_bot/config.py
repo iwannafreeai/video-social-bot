@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     storage_dir: Path = Path("./storage")
     max_upload_mb: int = 100
     file_ttl_hours: int = 24
+    web_worker_enabled: bool = False
 
     openai_api_key: str = ""
     whisper_model: str = "whisper-1"
