@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     watermark_font_size: int = Field(default=42, ge=12, le=120)
     watermark_opacity: float = Field(default=0.35, ge=0, le=1)
     watermark_position: str = "bottom-right"
+    subtitles_enabled: bool = True
+    burn_subtitles: bool = False
+    subtitle_max_chars: int = Field(default=42, ge=20, le=80)
+    subtitle_font_size: int = Field(default=44, ge=18, le=90)
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

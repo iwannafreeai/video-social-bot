@@ -19,7 +19,8 @@ from video_social_bot.repositories import (
     mark_ready,
 )
 from video_social_bot.storage import delete_path
-from video_social_bot.video import extract_audio, remaster_video
+from video_social_bot.subtitles import write_srt_file
+from video_social_bot.video import extract_audio, probe_video, remaster_video
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,13 @@ class JobWorker:
             audio_path = await extract_audio(self._settings, input_path)
             transcript = await TranscriptionClient(self._settings).transcribe(audio_path)
             caption = await CaptionClient(self._settings).generate_caption(transcript, job.language)
-            processed_path = await remaster_video(self._settings, input_path)
+            probe = await probe_video(input_path)
+            subtitle_path = write_srt_file(
+                self._settings,
+                transcript,
+                duration_seconds=probe.duration_seconds,
+            )
+            processed_path = await remaster_video(self._settings, input_path, subtitle_path)
         except Exception as exc:
             logger.exception("Job #%s failed", job_id)
             async with self._session_factory() as session:
@@ -92,13 +99,14 @@ class JobWorker:
             ready_job = await get_job(session, job_id)
             if ready_job is None:
                 return
-            await mark_ready(session, ready_job, processed_path, transcript, caption)
+            await mark_ready(session, ready_job, processed_path, subtitle_path, transcript, caption)
             await session.commit()
             logger.info("Job #%s ready: %s", job_id, processed_path)
             await self._notify_ready(
                 ready_job.telegram_chat_id,
                 ready_job.id,
                 processed_path,
+                subtitle_path,
                 caption,
             )
 
@@ -112,6 +120,7 @@ class JobWorker:
                 logger.info("Deleting expired job #%s", job.id)
                 delete_path(job.original_file_path)
                 delete_path(job.processed_file_path)
+                delete_path(job.subtitle_file_path)
                 await session.delete(job)
             await session.commit()
 
@@ -120,6 +129,7 @@ class JobWorker:
         telegram_chat_id: int | None,
         job_id: int,
         processed_path: Path,
+        subtitle_path: Path | None,
         caption: str,
     ) -> None:
         if self._bot is None or telegram_chat_id is None:
@@ -129,6 +139,8 @@ class JobWorker:
             f"Готово. Задача #{job_id}\n\nПодпись:\n{caption}",
         )
         await self._bot.send_document(telegram_chat_id, FSInputFile(processed_path))
+        if subtitle_path is not None:
+            await self._bot.send_document(telegram_chat_id, FSInputFile(subtitle_path))
 
     async def _notify_failure(
         self,

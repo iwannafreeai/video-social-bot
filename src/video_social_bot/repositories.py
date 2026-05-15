@@ -102,11 +102,13 @@ async def mark_ready(
     session: AsyncSession,
     job: VideoJob,
     processed_file_path: Path,
+    subtitle_file_path: Path | None,
     transcript: str,
     caption: str,
 ) -> None:
     job.status = JobStatus.READY
     job.processed_file_path = str(processed_file_path)
+    job.subtitle_file_path = str(subtitle_file_path) if subtitle_file_path is not None else None
     job.transcript = transcript
     job.caption = caption
     job.finished_at = datetime.now(UTC)

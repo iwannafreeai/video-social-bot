@@ -16,4 +16,7 @@
   {% if job.processed_file_path %}
     <p><a href="/jobs/{{ job.id }}/download">Скачать готовое видео</a></p>
   {% endif %}
+  {% if job.subtitle_file_path %}
+    <p><a href="/jobs/{{ job.id }}/subtitles">Скачать SRT-субтитры</a></p>
+  {% endif %}
 {% endblock %}

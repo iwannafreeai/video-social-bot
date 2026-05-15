@@ -7,6 +7,7 @@ from pathlib import Path
 
 from video_social_bot.config import Settings
 from video_social_bot.storage import new_storage_path
+from video_social_bot.subtitles import subtitles_filter
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,9 @@ async def extract_preview_frames(
 def watermark_filter(settings: Settings) -> str | None:
     if not settings.watermark_text:
         return None
-    escaped_text = settings.watermark_text.replace("\\", "\\\\").replace(":", "\\:")
+    escaped_text = (
+        settings.watermark_text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+    )
     alpha = f"{settings.watermark_opacity:.2f}"
     positions = {
         "top-left": ("40", "40"),
@@ -145,7 +148,11 @@ def watermark_filter(settings: Settings) -> str | None:
     )
 
 
-async def remaster_video(settings: Settings, input_path: Path) -> Path:
+async def remaster_video(
+    settings: Settings,
+    input_path: Path,
+    subtitle_path: Path | None = None,
+) -> Path:
     output_path = new_storage_path(settings, "processed", ".mp4")
     filter_parts = [
         "scale=1080:1920:force_original_aspect_ratio=decrease",
@@ -156,12 +163,16 @@ async def remaster_video(settings: Settings, input_path: Path) -> Path:
     watermark = watermark_filter(settings)
     if watermark is not None:
         filter_parts.append(watermark)
+    subtitle_filter = subtitles_filter(settings, subtitle_path)
+    if subtitle_filter is not None:
+        filter_parts.append(subtitle_filter)
     filters = ",".join(filter_parts)
     logger.info(
-        "Remastering video: input=%s output=%s watermark=%s",
+        "Remastering video: input=%s output=%s watermark=%s subtitles=%s",
         input_path,
         output_path,
         bool(watermark),
+        bool(subtitle_filter),
     )
     await run_command(
         [
