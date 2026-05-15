@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     app_name: str = "Video Social Bot"
     app_base_url: str = "http://127.0.0.1:8000"
     secret_key: str = "change-me"
+    log_level: str = "INFO"
 
     telegram_bot_token: str = ""
     admin_username: str = "admin"
@@ -32,6 +33,10 @@ class Settings(BaseSettings):
     ffmpeg_preset: str = "veryfast"
     output_crf: int = Field(default=28, ge=18, le=35)
     output_audio_bitrate: str = "96k"
+    watermark_text: str = ""
+    watermark_font_size: int = Field(default=42, ge=12, le=120)
+    watermark_opacity: float = Field(default=0.35, ge=0, le=1)
+    watermark_position: str = "bottom-right"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -48,6 +53,23 @@ class Settings(BaseSettings):
     def validate_file_ttl_hours(cls, value: int) -> int:
         if value < 1:
             msg = "FILE_TTL_HOURS must be positive"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("log_level")
+    @classmethod
+    def normalize_log_level(cls, value: str) -> str:
+        normalized = value.upper()
+        if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            msg = "LOG_LEVEL must be DEBUG, INFO, WARNING, ERROR, or CRITICAL"
+            raise ValueError(msg)
+        return normalized
+
+    @field_validator("watermark_position")
+    @classmethod
+    def validate_watermark_position(cls, value: str) -> str:
+        if value not in {"top-left", "top-right", "bottom-left", "bottom-right"}:
+            msg = "WATERMARK_POSITION must be top-left, top-right, bottom-left, or bottom-right"
             raise ValueError(msg)
         return value
 

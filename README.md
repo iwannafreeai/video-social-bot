@@ -8,7 +8,8 @@ MVP для Telegram-бота и лёгкого FastAPI-дэшборда:
 - генерация подписи на русском или английском через OpenAI-compatible LLM API;
 - админка и клиентский кабинет;
 - SQLite без отдельной БД;
-- локальное хранение файлов с автоудалением через 24 часа.
+- локальное хранение файлов с автоудалением через 24 часа;
+- debug-логирование и опциональный водяной знак/брендинг.
 
 ## Безопасная модель публикации
 
@@ -49,9 +50,12 @@ LLM_API_KEY=...
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=strong-password
 SECRET_KEY=random-long-secret
+LOG_LEVEL=INFO
 DATABASE_URL=sqlite+aiosqlite:////app/data/app.db
 STORAGE_DIR=/app/storage
 WEB_WORKER_ENABLED=false
+WATERMARK_TEXT=@your_brand
+WATERMARK_POSITION=bottom-right
 ```
 
 Собрать и запустить:
@@ -100,6 +104,7 @@ LLM_API_KEY=...
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=strong-password
 SECRET_KEY=random-long-secret
+LOG_LEVEL=INFO
 ```
 
 Для OpenRouter:
@@ -110,6 +115,55 @@ LLM_MODEL=openai/gpt-4o-mini
 ```
 
 Для другого провайдера поменять `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`.
+
+## Логирование и отладка
+
+Уровень логов задаётся через `.env`:
+
+```env
+LOG_LEVEL=INFO
+```
+
+Для подробной отладки:
+
+```env
+LOG_LEVEL=DEBUG
+```
+
+Что логируется:
+
+- старт/остановка web и bot;
+- вход в админку;
+- загрузка видео из Telegram и дэшборда;
+- создание и обработка задач;
+- FFmpeg/FFprobe команды;
+- этапы Whisper и генерации подписи;
+- ошибки worker-а и удаление просроченных задач.
+
+Docker-логи:
+
+```bash
+docker compose logs -f web
+docker compose logs -f bot
+```
+
+## Водяной знак / брендинг
+
+Водяной знак выключен по умолчанию. Чтобы включить:
+
+```env
+WATERMARK_TEXT=@your_brand
+WATERMARK_FONT_SIZE=42
+WATERMARK_OPACITY=0.35
+WATERMARK_POSITION=bottom-right
+```
+
+Доступные позиции:
+
+- `top-left`
+- `top-right`
+- `bottom-left`
+- `bottom-right`
 
 ## Ручная инициализация
 

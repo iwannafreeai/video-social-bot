@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,6 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from video_social_bot.config import Settings, get_settings
 from video_social_bot.db import create_engine, create_schema, create_session_factory
 from video_social_bot.enums import CaptionLanguage, JobStatus, UploadSource
+from video_social_bot.logging_config import configure_logging
 from video_social_bot.models import Client
 from video_social_bot.repositories import (
     create_video_job,
@@ -25,6 +27,7 @@ from video_social_bot.storage import ensure_storage_dirs, new_storage_path, save
 from video_social_bot.worker import JobWorker
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+logger = logging.getLogger(__name__)
 
 
 class AppState:
@@ -69,6 +72,8 @@ def client_token_serializer() -> URLSafeSerializer:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    configure_logging(settings)
+    logger.info("Starting web app")
     ensure_storage_dirs(settings)
     engine = create_engine(settings)
     await create_schema(engine)
@@ -76,6 +81,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state.settings = settings
     state.session_factory = session_factory
     if settings.web_worker_enabled:
+        logger.info("Starting web worker")
         state.worker = JobWorker(settings, session_factory)
         state.worker_task = asyncio.create_task(state.worker.run_forever())
     yield
@@ -84,6 +90,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if state.worker_task is not None:
         state.worker_task.cancel()
     await engine.dispose()
+    logger.info("Web app stopped")
 
 
 def create_app() -> FastAPI:
@@ -117,8 +124,10 @@ def create_app() -> FastAPI:
     ) -> RedirectResponse | HTMLResponse:
         settings = require_settings()
         if username == settings.admin_username and password == settings.admin_password:
+            logger.info("Admin login succeeded")
             request.session["admin"] = True
             return RedirectResponse("/", status_code=303)
+        logger.warning("Admin login failed: username=%s", username)
         return templates.TemplateResponse(request, "login.html", {"error": "Неверный логин/пароль"})
 
     @app.post("/logout")
@@ -137,6 +146,11 @@ def create_app() -> FastAPI:
         settings = require_settings()
         suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
         destination = new_storage_path(settings, "incoming", suffix)
+        logger.info(
+            "Dashboard upload started: filename=%s destination=%s",
+            file.filename,
+            destination,
+        )
         await save_upload_file(file, destination, settings.max_upload_mb * 1024 * 1024)
         job = await create_video_job(
             session=session,
@@ -146,6 +160,7 @@ def create_app() -> FastAPI:
         )
         await set_job_language(session, job.id, language)
         await session.commit()
+        logger.info("Dashboard job created: job_id=%s language=%s", job.id, language)
         return RedirectResponse("/", status_code=303)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)

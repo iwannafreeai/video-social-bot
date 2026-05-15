@@ -38,6 +38,7 @@ class JobWorker:
 
     async def run_forever(self) -> None:
         self._running = True
+        logger.info("Worker started")
         while self._running:
             try:
                 await self.process_next()
@@ -47,6 +48,7 @@ class JobWorker:
             await asyncio.sleep(5)
 
     def stop(self) -> None:
+        logger.info("Worker stopping")
         self._running = False
 
     async def process_next(self) -> None:
@@ -55,6 +57,7 @@ class JobWorker:
             if not jobs:
                 return
             job = jobs[-1]
+            logger.info("Dequeued job #%s", job.id)
             await mark_processing(session, job)
             await session.commit()
             job_id = job.id
@@ -62,9 +65,11 @@ class JobWorker:
         await self.process_job(job_id)
 
     async def process_job(self, job_id: int) -> None:
+        logger.info("Processing job #%s", job_id)
         async with self._session_factory() as session:
             job = await get_job(session, job_id)
             if job is None or job.language is None:
+                logger.warning("Skipping job #%s: missing job or language", job_id)
                 return
             input_path = Path(job.original_file_path)
 
@@ -74,6 +79,7 @@ class JobWorker:
             caption = await CaptionClient(self._settings).generate_caption(transcript, job.language)
             processed_path = await remaster_video(self._settings, input_path)
         except Exception as exc:
+            logger.exception("Job #%s failed", job_id)
             async with self._session_factory() as session:
                 failed_job = await get_job(session, job_id)
                 if failed_job is not None:
@@ -88,6 +94,7 @@ class JobWorker:
                 return
             await mark_ready(session, ready_job, processed_path, transcript, caption)
             await session.commit()
+            logger.info("Job #%s ready: %s", job_id, processed_path)
             await self._notify_ready(
                 ready_job.telegram_chat_id,
                 ready_job.id,
@@ -102,6 +109,7 @@ class JobWorker:
         async with self._session_factory() as session:
             jobs = await expired_jobs(session)
             for job in jobs:
+                logger.info("Deleting expired job #%s", job.id)
                 delete_path(job.original_file_path)
                 delete_path(job.processed_file_path)
                 await session.delete(job)

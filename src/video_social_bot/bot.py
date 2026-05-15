@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from video_social_bot.config import Settings, get_settings
 from video_social_bot.db import create_engine, create_schema, create_session_factory
 from video_social_bot.enums import CaptionLanguage, UploadSource
+from video_social_bot.logging_config import configure_logging
 from video_social_bot.repositories import (
     create_video_job,
     get_or_create_telegram_client,
@@ -40,6 +41,7 @@ def build_router(
 
     @router.message(CommandStart())
     async def start(message: Message) -> None:
+        logger.info("Start command received: chat_id=%s", message.chat.id)
         await message.answer(
             "Загрузи вертикальное видео до "
             f"{settings.max_upload_mb} МБ. Я обработаю файл и подготовлю подпись."
@@ -53,11 +55,23 @@ def build_router(
         file_size = telegram_file.file_size or 0
         max_bytes = settings.max_upload_mb * 1024 * 1024
         if file_size > max_bytes:
+            logger.warning(
+                "Rejected oversized Telegram file: chat_id=%s size=%s limit=%s",
+                message.chat.id,
+                file_size,
+                max_bytes,
+            )
             await message.answer(f"Файл больше лимита {settings.max_upload_mb} МБ.")
             return
 
         suffix = Path(telegram_file.file_name or "video.mp4").suffix or ".mp4"
         destination = new_storage_path(settings, "incoming", suffix)
+        logger.info(
+            "Downloading Telegram file: chat_id=%s size=%s destination=%s",
+            message.chat.id,
+            file_size,
+            destination,
+        )
         await bot.download(telegram_file, destination=destination)
 
         user = message.from_user
@@ -79,6 +93,7 @@ def build_router(
             )
             await session.commit()
 
+        logger.info("Telegram job created: job_id=%s chat_id=%s", job.id, message.chat.id)
         await message.answer(
             f"Видео принято. Задача #{job.id}. Выбери язык подписи:",
             reply_markup=language_keyboard(job.id),
@@ -89,6 +104,7 @@ def build_router(
         data = callback.data or ""
         _, raw_job_id, raw_language = data.split(":")
         language = CaptionLanguage(raw_language)
+        logger.info("Language selected: job_id=%s language=%s", raw_job_id, language)
         async with session_factory() as session:
             job = await set_job_language(session, int(raw_job_id), language)
             await session.commit()
@@ -103,8 +119,9 @@ def build_router(
 
 
 async def run_bot() -> None:
-    logging.basicConfig(level=logging.INFO)
     settings = get_settings()
+    configure_logging(settings)
+    logger.info("Starting Telegram bot")
     if not settings.telegram_bot_token:
         msg = "TELEGRAM_BOT_TOKEN is required"
         raise RuntimeError(msg)
