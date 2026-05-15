@@ -41,6 +41,13 @@ async def create_schema(engine: AsyncEngine) -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if engine.url.get_backend_name() == "sqlite":
+            columns = await conn.exec_driver_sql("PRAGMA table_info(video_jobs)")
+            existing = {row[1] for row in columns.fetchall()}
+            if "subtitle_file_path" not in existing:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE video_jobs ADD COLUMN subtitle_file_path TEXT",
+                )
 
 
 @asynccontextmanager

@@ -187,6 +187,18 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return FileResponse(job.processed_file_path, filename=f"processed-{job.id}.mp4")
 
+    @app.get("/jobs/{job_id}/subtitles")
+    async def download_subtitles(
+        request: Request,
+        job_id: int,
+        session: AsyncSession = Depends(get_session),
+    ) -> FileResponse:
+        require_auth(request)
+        job = await get_job(session, job_id)
+        if job is None or job.status != JobStatus.READY or not job.subtitle_file_path:
+            raise HTTPException(status_code=404)
+        return FileResponse(job.subtitle_file_path, filename=f"subtitles-{job.id}.srt")
+
     @app.get("/clients", response_class=HTMLResponse)
     async def clients(
         request: Request,

@@ -9,7 +9,8 @@ MVP для Telegram-бота и лёгкого FastAPI-дэшборда:
 - админка и клиентский кабинет;
 - SQLite без отдельной БД;
 - локальное хранение файлов с автоудалением через 24 часа;
-- debug-логирование и опциональный водяной знак/брендинг.
+- debug-логирование и опциональный водяной знак/брендинг;
+- SRT-субтитры и опциональное вшивание субтитров в видео.
 
 ## Безопасная модель публикации
 
@@ -56,6 +57,8 @@ STORAGE_DIR=/app/storage
 WEB_WORKER_ENABLED=false
 WATERMARK_TEXT=@your_brand
 WATERMARK_POSITION=bottom-right
+SUBTITLES_ENABLED=true
+BURN_SUBTITLES=false
 ```
 
 Собрать и запустить:
@@ -165,6 +168,25 @@ WATERMARK_POSITION=bottom-right
 - `bottom-left`
 - `bottom-right`
 
+## Субтитры
+
+После Whisper-транскрибации приложение может создать `.srt` файл. По умолчанию SRT включён, но не вшивается в видео:
+
+```env
+SUBTITLES_ENABLED=true
+BURN_SUBTITLES=false
+SUBTITLE_MAX_CHARS=42
+SUBTITLE_FONT_SIZE=44
+```
+
+Режимы:
+
+- `SUBTITLES_ENABLED=true`, `BURN_SUBTITLES=false` — готовое видео без субтитров + отдельный `.srt` файл.
+- `SUBTITLES_ENABLED=true`, `BURN_SUBTITLES=true` — `.srt` файл + субтитры вшиваются в видео через FFmpeg.
+- `SUBTITLES_ENABLED=false` — субтитры не создаются.
+
+В MVP тайминги SRT распределяются равномерно по длительности видео на основе текста транскрипта. Для более точных word-level таймингов нужен провайдер транскрибации с timestamps.
+
 ## Ручная инициализация
 
 ```bash
@@ -215,8 +237,8 @@ pytest
 
 ## Следующие этапы
 
-1. Добавить водяной знак/бренд-шаблоны клиента.
-2. Добавить авто-субтитры через SRT/ASS.
+1. Добавить бренд-шаблоны клиента.
+2. Добавить точные word-level субтитры через провайдера с timestamps.
 3. Добавить OAuth и официальную публикацию YouTube.
 4. Добавить Instagram Graph API после подготовки Meta App.
 5. Добавить TikTok Content Posting API после approval.

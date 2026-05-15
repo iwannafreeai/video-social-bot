@@ -10,7 +10,7 @@ from video_social_bot.config import Settings
 
 
 def ensure_storage_dirs(settings: Settings) -> None:
-    for name in ("incoming", "processed", "audio", "frames"):
+    for name in ("incoming", "processed", "audio", "frames", "subtitles"):
         (settings.storage_dir / name).mkdir(parents=True, exist_ok=True)
 
 
