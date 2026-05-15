@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="card">
+    <h2>Новая задача</h2>
+    <form action="/jobs" method="post" enctype="multipart/form-data">
+      <label>Видео до {{ settings.max_upload_mb }} МБ <input type="file" name="file" accept="video/*" required></label>
+      <label>Язык
+        <select name="language">
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <button type="submit">Загрузить</button>
+    </form>
+  </section>
+
+  <h2>Задачи</h2>
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Статус</th><th>Язык</th><th>Источник</th><th>Создано</th><th>Действия</th></tr>
+    </thead>
+    <tbody>
+      {% for job in jobs %}
+        <tr>
+          <td>#{{ job.id }}</td>
+          <td><span class="badge">{{ job.status }}</span></td>
+          <td>{{ job.language or "-" }}</td>
+          <td>{{ job.source }}</td>
+          <td>{{ job.created_at }}</td>
+          <td><a href="/jobs/{{ job.id }}">Открыть</a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

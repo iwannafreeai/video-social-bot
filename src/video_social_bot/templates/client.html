@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Клиентский кабинет</h1>
+  <table>
+    <thead><tr><th>ID</th><th>Статус</th><th>Подпись</th><th>Создано</th></tr></thead>
+    <tbody>
+      {% for job in jobs %}
+        <tr>
+          <td>#{{ job.id }}</td>
+          <td>{{ job.status }}</td>
+          <td>{{ job.caption or "-" }}</td>
+          <td>{{ job.created_at }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

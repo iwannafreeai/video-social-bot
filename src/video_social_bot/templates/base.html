@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ settings.app_name if settings is defined else "Video Social Bot" }}</title>
+    <style>
+      body { font-family: Arial, sans-serif; max-width: 1100px; margin: 32px auto; padding: 0 16px; color: #111; }
+      nav { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+      input, select, button { padding: 8px; margin: 4px 0; }
+      textarea { width: 100%; min-height: 140px; }
+      .badge { padding: 3px 7px; border-radius: 4px; background: #eee; }
+      .error { color: #b00020; }
+      .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <strong>Video Social Bot</strong>
+      <a href="/">Задачи</a>
+      <a href="/clients">Клиенты</a>
+      <form action="/logout" method="post"><button type="submit">Выйти</button></form>
+    </nav>
+    {% block content %}{% endblock %}
+  </body>
+</html>

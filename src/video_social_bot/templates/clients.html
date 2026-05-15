@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="card">
+    <h2>Новый клиент</h2>
+    <form action="/clients" method="post">
+      <label>Имя <input name="name" required></label>
+      <button type="submit">Создать</button>
+    </form>
+  </section>
+  <h2>Клиенты</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Имя</th><th>Кабинет</th></tr></thead>
+    <tbody>
+      {% for client in clients %}
+        <tr>
+          <td>{{ client.id }}</td>
+          <td>{{ client.name }}</td>
+          <td><code>/client/{{ tokens[client.id] }}</code></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

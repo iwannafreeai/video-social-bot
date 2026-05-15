@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Задача #{{ job.id }}</h1>
+  <p>Статус: <span class="badge">{{ job.status }}</span></p>
+  <p>Язык: {{ job.language or "-" }}</p>
+  <p>Истекает: {{ job.expires_at }}</p>
+  {% if job.error %}<p class="error">Ошибка: {{ job.error }}</p>{% endif %}
+  {% if job.caption %}
+    <h2>Подпись</h2>
+    <textarea readonly>{{ job.caption }}</textarea>
+  {% endif %}
+  {% if job.transcript %}
+    <h2>Транскрипт</h2>
+    <textarea readonly>{{ job.transcript }}</textarea>
+  {% endif %}
+  {% if job.processed_file_path %}
+    <p><a href="/jobs/{{ job.id }}/download">Скачать готовое видео</a></p>
+  {% endif %}
+{% endblock %}
