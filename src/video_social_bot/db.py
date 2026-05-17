@@ -12,6 +12,18 @@ from sqlalchemy.orm import DeclarativeBase
 
 from video_social_bot.config import Settings
 
+SQLITE_MIGRATIONS = {
+    "video_jobs": {
+        "subtitle_file_path": "ALTER TABLE video_jobs ADD COLUMN subtitle_file_path TEXT",
+    },
+    "clients": {
+        "watermark_text": "ALTER TABLE clients ADD COLUMN watermark_text VARCHAR(120)",
+        "watermark_position": "ALTER TABLE clients ADD COLUMN watermark_position VARCHAR(32)",
+        "watermark_opacity": "ALTER TABLE clients ADD COLUMN watermark_opacity INTEGER",
+        "watermark_font_size": "ALTER TABLE clients ADD COLUMN watermark_font_size INTEGER",
+    },
+}
+
 
 class Base(DeclarativeBase):
     pass
@@ -42,12 +54,12 @@ async def create_schema(engine: AsyncEngine) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         if engine.url.get_backend_name() == "sqlite":
-            columns = await conn.exec_driver_sql("PRAGMA table_info(video_jobs)")
-            existing = {row[1] for row in columns.fetchall()}
-            if "subtitle_file_path" not in existing:
-                await conn.exec_driver_sql(
-                    "ALTER TABLE video_jobs ADD COLUMN subtitle_file_path TEXT",
-                )
+            for table_name, migrations in SQLITE_MIGRATIONS.items():
+                columns = await conn.exec_driver_sql(f"PRAGMA table_info({table_name})")
+                existing = {row[1] for row in columns.fetchall()}
+                for column_name, statement in migrations.items():
+                    if column_name not in existing:
+                        await conn.exec_driver_sql(statement)
 
 
 @asynccontextmanager

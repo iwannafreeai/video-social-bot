@@ -92,6 +92,29 @@ async def list_clients(session: AsyncSession) -> list[Client]:
     return list(result.scalars())
 
 
+async def get_client(session: AsyncSession, client_id: int) -> Client | None:
+    result = await session.execute(select(Client).where(Client.id == client_id))
+    return result.scalar_one_or_none()
+
+
+async def update_client_branding(
+    session: AsyncSession,
+    client_id: int,
+    watermark_text: str,
+    watermark_position: str | None,
+    watermark_opacity: int | None,
+    watermark_font_size: int | None,
+) -> Client | None:
+    client = await get_client(session, client_id)
+    if client is None:
+        return None
+    client.watermark_text = watermark_text.strip() or None
+    client.watermark_position = watermark_position
+    client.watermark_opacity = watermark_opacity
+    client.watermark_font_size = watermark_font_size
+    return client
+
+
 async def mark_processing(session: AsyncSession, job: VideoJob) -> None:
     job.status = JobStatus.PROCESSING
     job.started_at = datetime.now(UTC)
