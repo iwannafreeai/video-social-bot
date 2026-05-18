@@ -160,6 +160,7 @@ async def schedule_youtube_publish(
     job.youtube_publish_status = "scheduled"
     job.youtube_publish_scheduled_at = scheduled_at
     job.youtube_publish_privacy = privacy_status
+    job.youtube_publish_attempts = 0
     job.youtube_publish_error = None
 
 
@@ -183,6 +184,20 @@ async def mark_youtube_publish_retry(
 async def mark_youtube_publish_failed(session: AsyncSession, job: VideoJob, error: str) -> None:
     job.youtube_publish_status = "failed"
     job.youtube_publish_error = error
+
+
+async def cancel_youtube_publish(session: AsyncSession, job: VideoJob) -> None:
+    job.youtube_publish_status = None
+    job.youtube_publish_scheduled_at = None
+    job.youtube_publish_privacy = None
+    job.youtube_publish_error = None
+
+
+async def retry_youtube_publish(session: AsyncSession, job: VideoJob) -> None:
+    job.youtube_publish_status = "scheduled"
+    job.youtube_publish_scheduled_at = datetime.now(UTC)
+    job.youtube_publish_attempts = 0
+    job.youtube_publish_error = None
 
 
 async def due_youtube_publish_jobs(session: AsyncSession) -> list[VideoJob]:
@@ -211,9 +226,49 @@ async def mark_tiktok_uploaded(session: AsyncSession, job: VideoJob, publish_id:
     job.tiktok_publish_error = None
 
 
+async def schedule_tiktok_upload(
+    session: AsyncSession,
+    job: VideoJob,
+    scheduled_at: datetime,
+) -> None:
+    job.tiktok_publish_status = "scheduled"
+    job.tiktok_published_at = scheduled_at
+    job.tiktok_publish_error = None
+
+
+async def mark_tiktok_attempt(session: AsyncSession, job: VideoJob) -> None:
+    job.tiktok_publish_status = "uploading"
+    job.tiktok_publish_error = None
+
+
 async def mark_tiktok_failed(session: AsyncSession, job: VideoJob, error: str) -> None:
     job.tiktok_publish_status = "failed"
     job.tiktok_publish_error = error
+
+
+async def cancel_tiktok_upload(session: AsyncSession, job: VideoJob) -> None:
+    job.tiktok_publish_status = None
+    job.tiktok_published_at = None
+    job.tiktok_publish_error = None
+
+
+async def due_tiktok_upload_jobs(session: AsyncSession) -> list[VideoJob]:
+    now = datetime.now(UTC)
+    result = await session.execute(
+        select(VideoJob)
+        .where(VideoJob.status == JobStatus.READY)
+        .where(VideoJob.processed_file_path.is_not(None))
+        .where(VideoJob.tiktok_publish_id.is_(None))
+        .where(VideoJob.tiktok_publish_status == "scheduled")
+        .where(
+            or_(
+                VideoJob.tiktok_published_at.is_(None),
+                VideoJob.tiktok_published_at <= now,
+            ),
+        )
+        .order_by(VideoJob.tiktok_published_at.asc()),
+    )
+    return list(result.scalars())
 
 
 async def expired_jobs(session: AsyncSession) -> list[VideoJob]:

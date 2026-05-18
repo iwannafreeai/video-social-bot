@@ -12,6 +12,7 @@ from video_social_bot.ai import CaptionClient, TranscriptionClient
 from video_social_bot.config import Settings
 from video_social_bot.enums import JobStatus
 from video_social_bot.repositories import (
+    due_tiktok_upload_jobs,
     due_youtube_publish_jobs,
     expired_jobs,
     get_client,
@@ -20,6 +21,9 @@ from video_social_bot.repositories import (
     mark_failed,
     mark_processing,
     mark_ready,
+    mark_tiktok_attempt,
+    mark_tiktok_failed,
+    mark_tiktok_uploaded,
     mark_youtube_publish_attempt,
     mark_youtube_publish_failed,
     mark_youtube_publish_retry,
@@ -27,6 +31,7 @@ from video_social_bot.repositories import (
 )
 from video_social_bot.storage import delete_path
 from video_social_bot.subtitles import write_srt_file
+from video_social_bot.tiktok import tiktok_connected, upload_tiktok_video_to_inbox
 from video_social_bot.video import extract_audio, probe_video, remaster_video
 from video_social_bot.youtube import build_youtube_title, upload_youtube_video, youtube_connected
 
@@ -52,6 +57,7 @@ class JobWorker:
             try:
                 await self.process_next()
                 await self.process_due_youtube_publishes()
+                await self.process_due_tiktok_uploads()
                 await self.cleanup_expired()
             except Exception:
                 logger.exception("Worker loop failed")
@@ -87,6 +93,44 @@ class JobWorker:
             job_id = job.id
 
         await self.publish_youtube_job(job_id)
+
+    async def process_due_tiktok_uploads(self) -> None:
+        if not tiktok_connected(self._settings):
+            return
+        async with self._session_factory() as session:
+            jobs = await due_tiktok_upload_jobs(session)
+            if not jobs:
+                return
+            job = jobs[0]
+            await mark_tiktok_attempt(session, job)
+            await session.commit()
+            job_id = job.id
+
+        await self.upload_tiktok_job(job_id)
+
+    async def upload_tiktok_job(self, job_id: int) -> None:
+        async with self._session_factory() as session:
+            job = await get_job(session, job_id)
+            if job is None or not job.processed_file_path:
+                return
+            video_path = Path(job.processed_file_path)
+
+        try:
+            result = await upload_tiktok_video_to_inbox(self._settings, video_path)
+        except Exception as exc:
+            logger.exception("Scheduled TikTok upload failed: job_id=%s", job_id)
+            async with self._session_factory() as session:
+                failed_job = await get_job(session, job_id)
+                if failed_job is not None:
+                    await mark_tiktok_failed(session, failed_job, str(exc))
+                    await session.commit()
+            return
+
+        async with self._session_factory() as session:
+            uploaded_job = await get_job(session, job_id)
+            if uploaded_job is not None:
+                await mark_tiktok_uploaded(session, uploaded_job, result.publish_id)
+                await session.commit()
 
     async def publish_youtube_job(self, job_id: int) -> None:
         async with self._session_factory() as session:

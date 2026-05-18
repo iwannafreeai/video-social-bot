@@ -25,6 +25,18 @@
       <p>Запланировано: {{ job.youtube_publish_scheduled_at or "-" }}</p>
       <p>Попытки: {{ job.youtube_publish_attempts }}</p>
       {% if job.youtube_publish_error %}<p class="error">Ошибка: {{ job.youtube_publish_error }}</p>{% endif %}
+      {% if job.youtube_publish_status == "scheduled" %}
+        <form action="/jobs/{{ job.id }}/youtube/cancel" method="post">
+          <button type="submit">Отменить YouTube schedule</button>
+        </form>
+      {% elif job.youtube_publish_status == "failed" %}
+        <form action="/jobs/{{ job.id }}/youtube/retry" method="post">
+          <button type="submit">Повторить YouTube сейчас</button>
+        </form>
+        <form action="/jobs/{{ job.id }}/youtube/cancel" method="post">
+          <button type="submit">Сбросить ошибку YouTube</button>
+        </form>
+      {% endif %}
     </section>
   {% elif job.processed_file_path and youtube_connected %}
     <section class="card">
@@ -69,12 +81,30 @@
         <button type="submit">Обновить TikTok status</button>
       </form>
     </section>
+  {% elif job.tiktok_publish_status %}
+    <section class="card">
+      <h2>TikTok queue</h2>
+      <p>Статус: <span class="badge">{{ job.tiktok_publish_status }}</span></p>
+      <p>Запланировано: {{ job.tiktok_published_at or "-" }}</p>
+      {% if job.tiktok_publish_error %}<p class="error">Ошибка: {{ job.tiktok_publish_error }}</p>{% endif %}
+      {% if job.tiktok_publish_status in ["scheduled", "failed"] %}
+        <form action="/jobs/{{ job.id }}/tiktok/cancel" method="post">
+          <button type="submit">Сбросить TikTok queue</button>
+        </form>
+      {% endif %}
+    </section>
   {% elif job.processed_file_path and tiktok_connected %}
     <section class="card">
       <h2>TikTok Content Posting API</h2>
       <p>Видео будет отправлено в TikTok Inbox. Пользователь должен завершить публикацию в приложении TikTok.</p>
       <form action="/jobs/{{ job.id }}/tiktok" method="post">
         <button type="submit">Отправить в TikTok Inbox</button>
+      </form>
+      <form action="/jobs/{{ job.id }}/tiktok/schedule" method="post">
+        <label>Дата/время UTC
+          <input type="datetime-local" name="scheduled_at" required>
+        </label>
+        <button type="submit">Запланировать TikTok Inbox</button>
       </form>
     </section>
   {% elif job.processed_file_path and tiktok_configured %}

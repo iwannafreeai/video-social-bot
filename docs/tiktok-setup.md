@@ -47,10 +47,11 @@ The OAuth token is stored in `TIKTOK_TOKEN_PATH`. In Docker production this shou
 
 1. Upload and process a video.
 2. Open the completed job.
-3. Click **Отправить в TikTok Inbox**.
+3. Click **Отправить в TikTok Inbox** or schedule **Запланировать TikTok Inbox**.
 4. Open TikTok and complete the final post from the inbox notification.
 
 The dashboard stores the returned TikTok `publish_id` and can refresh the API status.
+Large files are uploaded to TikTok in chunks instead of being read fully into memory.
 
 ## Notes
 
