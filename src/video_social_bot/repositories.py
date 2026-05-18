@@ -77,12 +77,15 @@ async def list_jobs(
     session: AsyncSession,
     status: JobStatus | None = None,
     client_id: int | None = None,
+    source: UploadSource | None = None,
 ) -> list[VideoJob]:
     query: Select[tuple[VideoJob]] = select(VideoJob).order_by(VideoJob.created_at.desc())
     if status is not None:
         query = query.where(VideoJob.status == status)
     if client_id is not None:
         query = query.where(VideoJob.client_id == client_id)
+    if source is not None:
+        query = query.where(VideoJob.source == source)
     result = await session.execute(query)
     return list(result.scalars())
 

@@ -4,14 +4,65 @@
   {% if client.watermark_text %}
     <p>Брендинг: {{ client.watermark_text }} / {{ client.watermark_position or "bottom-right" }}</p>
   {% endif %}
+
+  <section class="card">
+    <h2>Загрузить видео</h2>
+    <form action="/client/{{ token }}/jobs" method="post" enctype="multipart/form-data">
+      <label>Видео до {{ settings.max_upload_mb }} МБ <input type="file" name="file" accept="video/*" required></label>
+      <label>Язык подписи
+        <select name="language">
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <button type="submit">Отправить в обработку</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Статистика</h2>
+    <p>
+      Всего: <strong>{{ stats.total }}</strong>
+      · В очереди: <strong>{{ stats.queued }}</strong>
+      · Обработка: <strong>{{ stats.processing }}</strong>
+      · Готово: <strong>{{ stats.ready }}</strong>
+      · Ошибки: <strong>{{ stats.failed }}</strong>
+      · YouTube: <strong>{{ stats.youtube }}</strong>
+      · TikTok: <strong>{{ stats.tiktok }}</strong>
+    </p>
+  </section>
+
   <table>
-    <thead><tr><th>ID</th><th>Статус</th><th>Подпись</th><th>Создано</th></tr></thead>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Статус</th>
+        <th>Публикации</th>
+        <th>Файлы</th>
+        <th>Подпись</th>
+        <th>Создано</th>
+      </tr>
+    </thead>
     <tbody>
       {% for job in jobs %}
         <tr>
           <td>#{{ job.id }}</td>
-          <td>{{ job.status }}</td>
-          <td>{{ job.caption or "-" }}</td>
+          <td><span class="badge">{{ job.status }}</span>{% if job.error %}<br><span class="error">{{ job.error }}</span>{% endif %}</td>
+          <td>
+            YouTube: {{ "published" if job.youtube_video_id else (job.youtube_publish_status or "-") }}<br>
+            TikTok: {{ job.tiktok_publish_status or "-" }}
+          </td>
+          <td>
+            {% if job.processed_file_path %}
+              <a href="/client/{{ token }}/jobs/{{ job.id }}/download">MP4</a>
+            {% else %}
+              -
+            {% endif %}
+            {% if job.subtitle_file_path %}
+              · <a href="/client/{{ token }}/jobs/{{ job.id }}/subtitles">SRT</a>
+            {% endif %}
+          </td>
+          <td><textarea readonly>{{ job.caption or "-" }}</textarea></td>
           <td>{{ job.created_at }}</td>
         </tr>
       {% endfor %}
