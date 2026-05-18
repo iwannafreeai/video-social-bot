@@ -88,6 +88,8 @@ docker compose down
 
 Данные SQLite и видео хранятся в Docker volumes `app-data` и `app-storage`.
 
+Для VPS/production используй отдельную инструкцию: [`docs/vps-deploy.md`](docs/vps-deploy.md).
+
 ## Ручная установка без Docker
 
 ```bash
@@ -234,6 +236,8 @@ ruff check .
 mypy src
 pytest
 ```
+
+GitHub Actions автоматически запускает эти проверки и Docker build для pull request-ов и push в `main`.
 
 ## Следующие этапы
 
