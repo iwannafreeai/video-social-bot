@@ -21,6 +21,15 @@
       <strong>Video Social Bot</strong>
       <a href="/">Задачи</a>
       <a href="/clients">Клиенты</a>
+      {% if youtube_configured is defined %}
+        {% if youtube_connected %}
+          <span class="badge">YouTube подключён</span>
+        {% elif youtube_configured %}
+          <a href="/integrations/youtube/connect">Подключить YouTube</a>
+        {% else %}
+          <span class="badge">YouTube не настроен</span>
+        {% endif %}
+      {% endif %}
       <form action="/logout" method="post"><button type="submit">Выйти</button></form>
     </nav>
     {% block content %}{% endblock %}

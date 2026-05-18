@@ -15,6 +15,8 @@ from video_social_bot.config import Settings
 SQLITE_MIGRATIONS = {
     "video_jobs": {
         "subtitle_file_path": "ALTER TABLE video_jobs ADD COLUMN subtitle_file_path TEXT",
+        "youtube_video_id": "ALTER TABLE video_jobs ADD COLUMN youtube_video_id VARCHAR(64)",
+        "youtube_published_at": "ALTER TABLE video_jobs ADD COLUMN youtube_published_at DATETIME",
     },
     "clients": {
         "watermark_text": "ALTER TABLE clients ADD COLUMN watermark_text VARCHAR(120)",

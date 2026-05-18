@@ -39,6 +39,11 @@ class VideoJob(Base):
     original_file_path: Mapped[str] = mapped_column(Text, nullable=False)
     processed_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     subtitle_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    youtube_video_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    youtube_published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

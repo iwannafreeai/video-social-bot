@@ -16,6 +16,25 @@
   {% if job.processed_file_path %}
     <p><a href="/jobs/{{ job.id }}/download">Скачать готовое видео</a></p>
   {% endif %}
+  {% if job.youtube_video_id %}
+    <p>YouTube: <a href="https://www.youtube.com/watch?v={{ job.youtube_video_id }}" target="_blank">{{ job.youtube_video_id }}</a></p>
+  {% elif job.processed_file_path and youtube_connected %}
+    <section class="card">
+      <h2>Публикация в YouTube Shorts</h2>
+      <form action="/jobs/{{ job.id }}/youtube" method="post">
+        <label>Доступ
+          <select name="privacy_status">
+            <option value="private" {% if settings.youtube_default_privacy_status == "private" %}selected{% endif %}>Private</option>
+            <option value="unlisted" {% if settings.youtube_default_privacy_status == "unlisted" %}selected{% endif %}>Unlisted</option>
+            <option value="public" {% if settings.youtube_default_privacy_status == "public" %}selected{% endif %}>Public</option>
+          </select>
+        </label>
+        <button type="submit">Загрузить в YouTube</button>
+      </form>
+    </section>
+  {% elif job.processed_file_path and youtube_configured %}
+    <p><a href="/integrations/youtube/connect">Подключить YouTube</a>, чтобы загрузить видео.</p>
+  {% endif %}
   {% if job.subtitle_file_path %}
     <p><a href="/jobs/{{ job.id }}/subtitles">Скачать SRT-субтитры</a></p>
   {% endif %}

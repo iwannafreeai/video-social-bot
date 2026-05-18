@@ -10,7 +10,8 @@ MVP для Telegram-бота и лёгкого FastAPI-дэшборда:
 - SQLite без отдельной БД;
 - локальное хранение файлов с автоудалением через 24 часа;
 - debug-логирование и опциональный водяной знак/брендинг;
-- SRT-субтитры и опциональное вшивание субтитров в видео.
+- SRT-субтитры и опциональное вшивание субтитров в видео;
+- ручная публикация готовых видео в YouTube Shorts через официальный YouTube Data API.
 
 ## Безопасная модель публикации
 
@@ -87,6 +88,8 @@ docker compose down
 ```
 
 Данные SQLite и видео хранятся в Docker volumes `app-data` и `app-storage`.
+
+Для YouTube-загрузки используй инструкцию: [`docs/youtube-setup.md`](docs/youtube-setup.md).
 
 Для VPS/production используй отдельную инструкцию: [`docs/vps-deploy.md`](docs/vps-deploy.md).
 
@@ -198,6 +201,23 @@ SUBTITLE_FONT_SIZE=44
 
 В MVP тайминги SRT распределяются равномерно по длительности видео на основе текста транскрипта. Для более точных word-level таймингов нужен провайдер транскрибации с timestamps.
 
+## YouTube Shorts
+
+После обработки видео админ может загрузить готовый MP4 в YouTube через официальный YouTube Data API.
+
+Минимальные настройки:
+
+```env
+APP_BASE_URL=https://YOUR_DOMAIN
+YOUTUBE_CLIENT_ID=...
+YOUTUBE_CLIENT_SECRET=...
+YOUTUBE_REDIRECT_URI=https://YOUR_DOMAIN/integrations/youtube/callback
+YOUTUBE_TOKEN_PATH=/app/data/youtube-token.json
+YOUTUBE_DEFAULT_PRIVACY_STATUS=private
+```
+
+Полная инструкция: [`docs/youtube-setup.md`](docs/youtube-setup.md).
+
 ## Ручная инициализация
 
 ```bash
@@ -252,6 +272,6 @@ GitHub Actions автоматически запускает эти провер
 
 1. Добавить бренд-шаблоны клиента.
 2. Добавить точные word-level субтитры через провайдера с timestamps.
-3. Добавить OAuth и официальную публикацию YouTube.
+3. Добавить автоматическое расписание YouTube-публикаций.
 4. Добавить Instagram Graph API после подготовки Meta App.
 5. Добавить TikTok Content Posting API после approval.
