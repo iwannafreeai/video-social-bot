@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1>Клиентский кабинет</h1>
+  <h1>Клиентский кабинет: {{ client.name }}</h1>
+  {% if client.watermark_text %}
+    <p>Брендинг: {{ client.watermark_text }} / {{ client.watermark_position or "bottom-right" }}</p>
+  {% endif %}
   <table>
     <thead><tr><th>ID</th><th>Статус</th><th>Подпись</th><th>Создано</th></tr></thead>
     <tbody>

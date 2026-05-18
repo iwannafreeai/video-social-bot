@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from video_social_bot.config import Settings
+from video_social_bot.models import Client
 from video_social_bot.storage import new_storage_path
 from video_social_bot.subtitles import subtitles_filter
 
@@ -124,25 +125,52 @@ async def extract_preview_frames(
     return frames
 
 
-def watermark_filter(settings: Settings) -> str | None:
-    if not settings.watermark_text:
+@dataclass(frozen=True)
+class WatermarkSettings:
+    text: str
+    font_size: int
+    opacity: float
+    position: str
+
+
+def resolve_watermark_settings(
+    settings: Settings,
+    client: Client | None = None,
+) -> WatermarkSettings | None:
+    text = client.watermark_text if client and client.watermark_text else settings.watermark_text
+    if not text:
+        return None
+    font_size = client.watermark_font_size if client and client.watermark_font_size else None
+    opacity = client.watermark_opacity if client and client.watermark_opacity is not None else None
+    position = client.watermark_position if client and client.watermark_position else None
+    return WatermarkSettings(
+        text=text,
+        font_size=font_size or settings.watermark_font_size,
+        opacity=(opacity / 100) if opacity is not None else settings.watermark_opacity,
+        position=position or settings.watermark_position,
+    )
+
+
+def watermark_filter(settings: Settings, client: Client | None = None) -> str | None:
+    watermark_settings = resolve_watermark_settings(settings, client)
+    if watermark_settings is None:
         return None
     escaped_text = (
-        settings.watermark_text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+        watermark_settings.text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
     )
-    alpha = f"{settings.watermark_opacity:.2f}"
+    alpha = f"{watermark_settings.opacity:.2f}"
     positions = {
         "top-left": ("40", "40"),
         "top-right": ("w-tw-40", "40"),
         "bottom-left": ("40", "h-th-40"),
         "bottom-right": ("w-tw-40", "h-th-40"),
     }
-    x, y = positions[settings.watermark_position]
+    x, y = positions[watermark_settings.position]
     return (
         "drawtext="
         f"text='{escaped_text}':"
         "fontcolor=white@"
-        f"{alpha}:fontsize={settings.watermark_font_size}:"
+        f"{alpha}:fontsize={watermark_settings.font_size}:"
         "box=1:boxcolor=black@0.25:boxborderw=12:"
         f"x={x}:y={y}"
     )
@@ -152,6 +180,7 @@ async def remaster_video(
     settings: Settings,
     input_path: Path,
     subtitle_path: Path | None = None,
+    client: Client | None = None,
 ) -> Path:
     output_path = new_storage_path(settings, "processed", ".mp4")
     filter_parts = [
@@ -160,7 +189,7 @@ async def remaster_video(
         "eq=contrast=1.03:saturation=1.04:brightness=0.01",
         "setsar=1",
     ]
-    watermark = watermark_filter(settings)
+    watermark = watermark_filter(settings, client)
     if watermark is not None:
         filter_parts.append(watermark)
     subtitle_filter = subtitles_filter(settings, subtitle_path)

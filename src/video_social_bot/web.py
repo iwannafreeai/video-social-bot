@@ -18,11 +18,13 @@ from video_social_bot.logging_config import configure_logging
 from video_social_bot.models import Client
 from video_social_bot.repositories import (
     create_video_job,
+    get_client,
     get_job,
     list_clients,
     list_jobs,
     mark_youtube_published,
     set_job_language,
+    update_client_branding,
 )
 from video_social_bot.storage import ensure_storage_dirs, new_storage_path, save_upload_file
 from video_social_bot.worker import JobWorker
@@ -309,6 +311,37 @@ def create_app() -> FastAPI:
         await session.commit()
         return RedirectResponse("/clients", status_code=303)
 
+    @app.post("/clients/{client_id}/branding")
+    async def update_branding(
+        request: Request,
+        client_id: int,
+        watermark_text: str = Form(""),
+        watermark_position: str = Form("bottom-right"),
+        watermark_opacity: int = Form(35),
+        watermark_font_size: int = Form(42),
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        require_auth(request)
+        if watermark_position not in {"top-left", "top-right", "bottom-left", "bottom-right"}:
+            raise HTTPException(status_code=400)
+        if watermark_opacity < 0 or watermark_opacity > 100:
+            raise HTTPException(status_code=400)
+        if watermark_font_size < 12 or watermark_font_size > 120:
+            raise HTTPException(status_code=400)
+        client = await update_client_branding(
+            session=session,
+            client_id=client_id,
+            watermark_text=watermark_text,
+            watermark_position=watermark_position,
+            watermark_opacity=watermark_opacity,
+            watermark_font_size=watermark_font_size,
+        )
+        if client is None:
+            raise HTTPException(status_code=404)
+        await session.commit()
+        logger.info("Client branding updated: client_id=%s", client_id)
+        return RedirectResponse("/clients", status_code=303)
+
     @app.get("/client/{token}", response_class=HTMLResponse)
     async def client_cabinet(
         request: Request,
@@ -320,8 +353,11 @@ def create_app() -> FastAPI:
             client_id = int(payload["client_id"])
         except (BadSignature, KeyError, TypeError, ValueError):
             raise HTTPException(status_code=404) from None
+        client = await get_client(session, client_id)
+        if client is None:
+            raise HTTPException(status_code=404)
         jobs = await list_jobs(session, client_id=client_id)
-        return templates.TemplateResponse(request, "client.html", {"jobs": jobs})
+        return templates.TemplateResponse(request, "client.html", {"client": client, "jobs": jobs})
 
     return app
 

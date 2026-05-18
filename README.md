@@ -91,6 +91,8 @@ docker compose down
 
 Для YouTube-загрузки используй инструкцию: [`docs/youtube-setup.md`](docs/youtube-setup.md).
 
+Для VPS/production используй отдельную инструкцию: [`docs/vps-deploy.md`](docs/vps-deploy.md).
+
 ## Ручная установка без Docker
 
 ```bash
@@ -170,6 +172,15 @@ WATERMARK_POSITION=bottom-right
 - `top-right`
 - `bottom-left`
 - `bottom-right`
+
+Можно переопределить бренд-шаблон для конкретного клиента в админке `/clients`:
+
+- текст водяного знака;
+- позиция;
+- прозрачность в процентах;
+- размер шрифта.
+
+Если у клиента задан свой текст водяного знака, он используется вместо глобального `WATERMARK_TEXT`. Если бренд клиента пустой, используется глобальная настройка из `.env`.
 
 ## Субтитры
 
@@ -254,6 +265,8 @@ ruff check .
 mypy src
 pytest
 ```
+
+GitHub Actions автоматически запускает эти проверки и Docker build для pull request-ов и push в `main`.
 
 ## Следующие этапы
 

@@ -17,6 +17,10 @@ class Client(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     telegram_user_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
+    watermark_text: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    watermark_position: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    watermark_opacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    watermark_font_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     jobs: Mapped[list["VideoJob"]] = relationship(back_populates="client")

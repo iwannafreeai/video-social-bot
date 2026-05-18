@@ -12,6 +12,7 @@ from video_social_bot.config import Settings
 from video_social_bot.enums import JobStatus
 from video_social_bot.repositories import (
     expired_jobs,
+    get_client,
     get_job,
     list_jobs,
     mark_failed,
@@ -73,6 +74,7 @@ class JobWorker:
                 logger.warning("Skipping job #%s: missing job or language", job_id)
                 return
             input_path = Path(job.original_file_path)
+            client = await get_client(session, job.client_id) if job.client_id is not None else None
 
         try:
             audio_path = await extract_audio(self._settings, input_path)
@@ -84,7 +86,7 @@ class JobWorker:
                 transcript,
                 duration_seconds=probe.duration_seconds,
             )
-            processed_path = await remaster_video(self._settings, input_path, subtitle_path)
+            processed_path = await remaster_video(self._settings, input_path, subtitle_path, client)
         except Exception as exc:
             logger.exception("Job #%s failed", job_id)
             async with self._session_factory() as session:
