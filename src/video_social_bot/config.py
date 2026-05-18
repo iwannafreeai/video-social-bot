@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     burn_subtitles: bool = False
     subtitle_max_chars: int = Field(default=42, ge=20, le=80)
     subtitle_font_size: int = Field(default=44, ge=18, le=90)
+    youtube_client_id: str = ""
+    youtube_client_secret: str = ""
+    youtube_redirect_uri: str = ""
+    youtube_scopes: str = "https://www.googleapis.com/auth/youtube.upload"
+    youtube_token_path: Path = Path("./data/youtube-token.json")
+    youtube_default_privacy_status: str = "private"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -74,6 +80,14 @@ class Settings(BaseSettings):
     def validate_watermark_position(cls, value: str) -> str:
         if value not in {"top-left", "top-right", "bottom-left", "bottom-right"}:
             msg = "WATERMARK_POSITION must be top-left, top-right, bottom-left, or bottom-right"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("youtube_default_privacy_status")
+    @classmethod
+    def validate_youtube_default_privacy_status(cls, value: str) -> str:
+        if value not in {"private", "unlisted", "public"}:
+            msg = "YOUTUBE_DEFAULT_PRIVACY_STATUS must be private, unlisted, or public"
             raise ValueError(msg)
         return value
 

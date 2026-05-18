@@ -121,6 +121,11 @@ async def mark_failed(session: AsyncSession, job: VideoJob, error: str) -> None:
     job.finished_at = datetime.now(UTC)
 
 
+async def mark_youtube_published(session: AsyncSession, job: VideoJob, video_id: str) -> None:
+    job.youtube_video_id = video_id
+    job.youtube_published_at = datetime.now(UTC)
+
+
 async def expired_jobs(session: AsyncSession) -> list[VideoJob]:
     result = await session.execute(
         select(VideoJob).where(VideoJob.expires_at < datetime.now(UTC)),

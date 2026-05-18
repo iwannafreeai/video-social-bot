@@ -21,10 +21,20 @@ from video_social_bot.repositories import (
     get_job,
     list_clients,
     list_jobs,
+    mark_youtube_published,
     set_job_language,
 )
 from video_social_bot.storage import ensure_storage_dirs, new_storage_path, save_upload_file
 from video_social_bot.worker import JobWorker
+from video_social_bot.youtube import (
+    build_youtube_auth_url,
+    build_youtube_title,
+    exchange_youtube_code,
+    save_youtube_token,
+    upload_youtube_video,
+    youtube_configured,
+    youtube_connected,
+)
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 logger = logging.getLogger(__name__)
@@ -109,7 +119,13 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse(
             request,
             "index.html",
-            {"jobs": jobs, "clients": clients, "settings": require_settings()},
+            {
+                "jobs": jobs,
+                "clients": clients,
+                "settings": require_settings(),
+                "youtube_connected": youtube_connected(require_settings()),
+                "youtube_configured": youtube_configured(require_settings()),
+            },
         )
 
     @app.get("/login", response_class=HTMLResponse)
@@ -144,6 +160,8 @@ def create_app() -> FastAPI:
     ) -> RedirectResponse:
         require_auth(request)
         settings = require_settings()
+        if youtube_connected(settings):
+            return RedirectResponse("/", status_code=303)
         suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
         destination = new_storage_path(settings, "incoming", suffix)
         logger.info(
@@ -173,7 +191,73 @@ def create_app() -> FastAPI:
         job = await get_job(session, job_id)
         if job is None:
             raise HTTPException(status_code=404)
-        return templates.TemplateResponse(request, "job.html", {"job": job})
+        settings = require_settings()
+        if not youtube_configured(settings):
+            raise HTTPException(status_code=400, detail="YouTube OAuth is not configured")
+        return templates.TemplateResponse(
+            request,
+            "job.html",
+            {
+                "job": job,
+                "settings": settings,
+                "youtube_connected": youtube_connected(settings),
+                "youtube_configured": youtube_configured(settings),
+            },
+        )
+
+    @app.get("/integrations/youtube/connect")
+    async def connect_youtube(request: Request) -> RedirectResponse:
+        require_auth(request)
+        settings = require_settings()
+        if not youtube_configured(settings):
+            raise HTTPException(status_code=400, detail="YouTube OAuth is not configured")
+        state_token = client_token_serializer().dumps({"integration": "youtube"})
+        request.session["youtube_oauth_state"] = state_token
+        return RedirectResponse(build_youtube_auth_url(settings, state_token), status_code=303)
+
+    @app.get("/integrations/youtube/callback")
+    async def youtube_callback(
+        request: Request,
+        code: str,
+        state: str,
+    ) -> RedirectResponse:
+        require_auth(request)
+        stored_state = request.session.get("youtube_oauth_state")
+        if not isinstance(stored_state, str) or state != stored_state:
+            raise HTTPException(status_code=400, detail="Invalid YouTube OAuth state")
+        settings = require_settings()
+        token = await exchange_youtube_code(settings, code)
+        save_youtube_token(settings, token)
+        request.session.pop("youtube_oauth_state", None)
+        logger.info("YouTube account connected")
+        return RedirectResponse("/", status_code=303)
+
+    @app.post("/jobs/{job_id}/youtube")
+    async def publish_job_to_youtube(
+        request: Request,
+        job_id: int,
+        privacy_status: str = Form(...),
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        require_auth(request)
+        if privacy_status not in {"private", "unlisted", "public"}:
+            raise HTTPException(status_code=400, detail="Invalid YouTube privacy status")
+        settings = require_settings()
+        if not youtube_configured(settings) or not youtube_connected(settings):
+            raise HTTPException(status_code=400, detail="YouTube account is not connected")
+        job = await get_job(session, job_id)
+        if job is None or job.status != JobStatus.READY or not job.processed_file_path:
+            raise HTTPException(status_code=404)
+        video_id = await upload_youtube_video(
+            settings=settings,
+            video_path=Path(job.processed_file_path),
+            title=build_youtube_title(job.id, job.caption),
+            description=job.caption or "",
+            privacy_status=privacy_status,
+        )
+        await mark_youtube_published(session, job, video_id)
+        await session.commit()
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
     @app.get("/jobs/{job_id}/download")
     async def download_job(

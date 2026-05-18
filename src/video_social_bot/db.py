@@ -48,6 +48,14 @@ async def create_schema(engine: AsyncEngine) -> None:
                 await conn.exec_driver_sql(
                     "ALTER TABLE video_jobs ADD COLUMN subtitle_file_path TEXT",
                 )
+            if "youtube_video_id" not in existing:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE video_jobs ADD COLUMN youtube_video_id VARCHAR(64)",
+                )
+            if "youtube_published_at" not in existing:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE video_jobs ADD COLUMN youtube_published_at DATETIME",
+                )
 
 
 @asynccontextmanager
