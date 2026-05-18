@@ -30,6 +30,15 @@
           <span class="badge">YouTube не настроен</span>
         {% endif %}
       {% endif %}
+      {% if tiktok_configured is defined %}
+        {% if tiktok_connected %}
+          <span class="badge">TikTok подключён</span>
+        {% elif tiktok_configured %}
+          <a href="/integrations/tiktok/connect">Подключить TikTok</a>
+        {% else %}
+          <span class="badge">TikTok не настроен</span>
+        {% endif %}
+      {% endif %}
       <form action="/logout" method="post"><button type="submit">Выйти</button></form>
     </nav>
     {% block content %}{% endblock %}

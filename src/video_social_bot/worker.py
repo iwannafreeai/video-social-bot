@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from aiogram import Bot
@@ -11,6 +12,7 @@ from video_social_bot.ai import CaptionClient, TranscriptionClient
 from video_social_bot.config import Settings
 from video_social_bot.enums import JobStatus
 from video_social_bot.repositories import (
+    due_youtube_publish_jobs,
     expired_jobs,
     get_client,
     get_job,
@@ -18,10 +20,15 @@ from video_social_bot.repositories import (
     mark_failed,
     mark_processing,
     mark_ready,
+    mark_youtube_publish_attempt,
+    mark_youtube_publish_failed,
+    mark_youtube_publish_retry,
+    mark_youtube_published,
 )
 from video_social_bot.storage import delete_path
 from video_social_bot.subtitles import write_srt_file
 from video_social_bot.video import extract_audio, probe_video, remaster_video
+from video_social_bot.youtube import build_youtube_title, upload_youtube_video, youtube_connected
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +51,7 @@ class JobWorker:
         while self._running:
             try:
                 await self.process_next()
+                await self.process_due_youtube_publishes()
                 await self.cleanup_expired()
             except Exception:
                 logger.exception("Worker loop failed")
@@ -65,6 +73,65 @@ class JobWorker:
             job_id = job.id
 
         await self.process_job(job_id)
+
+    async def process_due_youtube_publishes(self) -> None:
+        if not youtube_connected(self._settings):
+            return
+        async with self._session_factory() as session:
+            jobs = await due_youtube_publish_jobs(session)
+            if not jobs:
+                return
+            job = jobs[0]
+            await mark_youtube_publish_attempt(session, job)
+            await session.commit()
+            job_id = job.id
+
+        await self.publish_youtube_job(job_id)
+
+    async def publish_youtube_job(self, job_id: int) -> None:
+        async with self._session_factory() as session:
+            job = await get_job(session, job_id)
+            if job is None or not job.processed_file_path:
+                return
+            video_path = Path(job.processed_file_path)
+            privacy_status = (
+                job.youtube_publish_privacy or self._settings.youtube_default_privacy_status
+            )
+            attempts = job.youtube_publish_attempts or 0
+            caption = job.caption
+
+        try:
+            video_id = await upload_youtube_video(
+                settings=self._settings,
+                video_path=video_path,
+                title=build_youtube_title(job_id, caption),
+                description=caption or "",
+                privacy_status=privacy_status,
+            )
+        except Exception as exc:
+            logger.exception("Scheduled YouTube publish failed: job_id=%s", job_id)
+            async with self._session_factory() as session:
+                failed_job = await get_job(session, job_id)
+                if failed_job is None:
+                    return
+                if attempts < self._settings.youtube_publish_retry_limit:
+                    await mark_youtube_publish_retry(
+                        session,
+                        failed_job,
+                        str(exc),
+                        datetime.now(UTC)
+                        + timedelta(seconds=self._settings.youtube_publish_retry_delay_seconds),
+                    )
+                else:
+                    await mark_youtube_publish_failed(session, failed_job, str(exc))
+                await session.commit()
+            return
+
+        async with self._session_factory() as session:
+            published_job = await get_job(session, job_id)
+            if published_job is not None:
+                await mark_youtube_published(session, published_job, video_id)
+                await session.commit()
 
     async def process_job(self, job_id: int) -> None:
         logger.info("Processing job #%s", job_id)

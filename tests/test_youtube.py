@@ -69,3 +69,10 @@ def test_build_youtube_title_fallback() -> None:
     result = build_youtube_title(123, "")
 
     assert result == "Video Social Bot #123"
+
+
+def test_youtube_publish_retry_settings_defaults() -> None:
+    settings = Settings()
+
+    assert settings.youtube_publish_retry_limit == 3
+    assert settings.youtube_publish_retry_delay_seconds == 300

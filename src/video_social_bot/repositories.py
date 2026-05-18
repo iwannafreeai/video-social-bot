@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from video_social_bot.config import Settings
@@ -147,6 +147,73 @@ async def mark_failed(session: AsyncSession, job: VideoJob, error: str) -> None:
 async def mark_youtube_published(session: AsyncSession, job: VideoJob, video_id: str) -> None:
     job.youtube_video_id = video_id
     job.youtube_published_at = datetime.now(UTC)
+    job.youtube_publish_status = "published"
+    job.youtube_publish_error = None
+
+
+async def schedule_youtube_publish(
+    session: AsyncSession,
+    job: VideoJob,
+    scheduled_at: datetime,
+    privacy_status: str,
+) -> None:
+    job.youtube_publish_status = "scheduled"
+    job.youtube_publish_scheduled_at = scheduled_at
+    job.youtube_publish_privacy = privacy_status
+    job.youtube_publish_error = None
+
+
+async def mark_youtube_publish_attempt(session: AsyncSession, job: VideoJob) -> None:
+    job.youtube_publish_attempts = (job.youtube_publish_attempts or 0) + 1
+    job.youtube_publish_status = "publishing"
+    job.youtube_publish_error = None
+
+
+async def mark_youtube_publish_retry(
+    session: AsyncSession,
+    job: VideoJob,
+    error: str,
+    retry_at: datetime,
+) -> None:
+    job.youtube_publish_status = "scheduled"
+    job.youtube_publish_scheduled_at = retry_at
+    job.youtube_publish_error = error
+
+
+async def mark_youtube_publish_failed(session: AsyncSession, job: VideoJob, error: str) -> None:
+    job.youtube_publish_status = "failed"
+    job.youtube_publish_error = error
+
+
+async def due_youtube_publish_jobs(session: AsyncSession) -> list[VideoJob]:
+    now = datetime.now(UTC)
+    result = await session.execute(
+        select(VideoJob)
+        .where(VideoJob.status == JobStatus.READY)
+        .where(VideoJob.processed_file_path.is_not(None))
+        .where(VideoJob.youtube_video_id.is_(None))
+        .where(VideoJob.youtube_publish_status == "scheduled")
+        .where(
+            or_(
+                VideoJob.youtube_publish_scheduled_at.is_(None),
+                VideoJob.youtube_publish_scheduled_at <= now,
+            ),
+        )
+        .order_by(VideoJob.youtube_publish_scheduled_at.asc()),
+    )
+    return list(result.scalars())
+
+
+async def mark_tiktok_uploaded(session: AsyncSession, job: VideoJob, publish_id: str) -> None:
+    job.tiktok_publish_id = publish_id
+    job.tiktok_publish_status = "uploaded"
+    job.tiktok_published_at = datetime.now(UTC)
+    job.tiktok_publish_error = None
+
+
+async def mark_tiktok_failed(session: AsyncSession, job: VideoJob, error: str) -> None:
+    job.tiktok_publish_status = "failed"
+    job.tiktok_publish_error = error
 
 
 async def expired_jobs(session: AsyncSession) -> list[VideoJob]:

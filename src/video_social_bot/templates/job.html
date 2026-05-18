@@ -18,6 +18,14 @@
   {% endif %}
   {% if job.youtube_video_id %}
     <p>YouTube: <a href="https://www.youtube.com/watch?v={{ job.youtube_video_id }}" target="_blank">{{ job.youtube_video_id }}</a></p>
+  {% elif job.youtube_publish_status %}
+    <section class="card">
+      <h2>YouTube publish queue</h2>
+      <p>Статус: <span class="badge">{{ job.youtube_publish_status }}</span></p>
+      <p>Запланировано: {{ job.youtube_publish_scheduled_at or "-" }}</p>
+      <p>Попытки: {{ job.youtube_publish_attempts }}</p>
+      {% if job.youtube_publish_error %}<p class="error">Ошибка: {{ job.youtube_publish_error }}</p>{% endif %}
+    </section>
   {% elif job.processed_file_path and youtube_connected %}
     <section class="card">
       <h2>Публикация в YouTube Shorts</h2>
@@ -31,11 +39,45 @@
         </label>
         <button type="submit">Загрузить в YouTube</button>
       </form>
+      <form action="/jobs/{{ job.id }}/youtube/schedule" method="post">
+        <label>Дата/время UTC
+          <input type="datetime-local" name="scheduled_at" required>
+        </label>
+        <label>Доступ
+          <select name="privacy_status">
+            <option value="private" {% if settings.youtube_default_privacy_status == "private" %}selected{% endif %}>Private</option>
+            <option value="unlisted" {% if settings.youtube_default_privacy_status == "unlisted" %}selected{% endif %}>Unlisted</option>
+            <option value="public" {% if settings.youtube_default_privacy_status == "public" %}selected{% endif %}>Public</option>
+          </select>
+        </label>
+        <button type="submit">Запланировать YouTube</button>
+      </form>
     </section>
   {% elif job.processed_file_path and youtube_configured %}
     <p><a href="/integrations/youtube/connect">Подключить YouTube</a>, чтобы загрузить видео.</p>
   {% endif %}
   {% if job.subtitle_file_path %}
     <p><a href="/jobs/{{ job.id }}/subtitles">Скачать SRT-субтитры</a></p>
+  {% endif %}
+  {% if job.tiktok_publish_id %}
+    <section class="card">
+      <h2>TikTok</h2>
+      <p>Publish ID: {{ job.tiktok_publish_id }}</p>
+      <p>Статус: <span class="badge">{{ job.tiktok_publish_status or "-" }}</span></p>
+      {% if job.tiktok_publish_error %}<p class="error">Ошибка: {{ job.tiktok_publish_error }}</p>{% endif %}
+      <form action="/jobs/{{ job.id }}/tiktok/status" method="post">
+        <button type="submit">Обновить TikTok status</button>
+      </form>
+    </section>
+  {% elif job.processed_file_path and tiktok_connected %}
+    <section class="card">
+      <h2>TikTok Content Posting API</h2>
+      <p>Видео будет отправлено в TikTok Inbox. Пользователь должен завершить публикацию в приложении TikTok.</p>
+      <form action="/jobs/{{ job.id }}/tiktok" method="post">
+        <button type="submit">Отправить в TikTok Inbox</button>
+      </form>
+    </section>
+  {% elif job.processed_file_path and tiktok_configured %}
+    <p><a href="/integrations/tiktok/connect">Подключить TikTok</a>, чтобы отправить видео в TikTok Inbox.</p>
   {% endif %}
 {% endblock %}

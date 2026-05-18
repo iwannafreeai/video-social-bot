@@ -44,6 +44,21 @@ class VideoJob(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    youtube_publish_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    youtube_publish_privacy: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    youtube_publish_scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    youtube_publish_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    youtube_publish_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tiktok_publish_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    tiktok_publish_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tiktok_published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    tiktok_publish_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

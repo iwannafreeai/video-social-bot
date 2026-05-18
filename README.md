@@ -11,7 +11,8 @@ MVP для Telegram-бота и лёгкого FastAPI-дэшборда:
 - локальное хранение файлов с автоудалением через 24 часа;
 - debug-логирование и опциональный водяной знак/брендинг;
 - SRT-субтитры и опциональное вшивание субтитров в видео;
-- ручная публикация готовых видео в YouTube Shorts через официальный YouTube Data API.
+- ручная и отложенная публикация готовых видео в YouTube Shorts через официальный YouTube Data API;
+- отправка готовых видео в TikTok Inbox через официальный Content Posting API.
 
 ## Безопасная модель публикации
 
@@ -90,6 +91,8 @@ docker compose down
 Данные SQLite и видео хранятся в Docker volumes `app-data` и `app-storage`.
 
 Для YouTube-загрузки используй инструкцию: [`docs/youtube-setup.md`](docs/youtube-setup.md).
+
+Для TikTok-загрузки используй инструкцию: [`docs/tiktok-setup.md`](docs/tiktok-setup.md).
 
 Для VPS/production используй отдельную инструкцию: [`docs/vps-deploy.md`](docs/vps-deploy.md).
 
@@ -203,7 +206,7 @@ SUBTITLE_FONT_SIZE=44
 
 ## YouTube Shorts
 
-После обработки видео админ может загрузить готовый MP4 в YouTube через официальный YouTube Data API.
+После обработки видео админ может загрузить готовый MP4 в YouTube через официальный YouTube Data API сразу или запланировать публикацию по UTC-времени. Worker выполнит публикацию и сделает retry при временной ошибке.
 
 Минимальные настройки:
 
@@ -214,9 +217,28 @@ YOUTUBE_CLIENT_SECRET=...
 YOUTUBE_REDIRECT_URI=https://YOUR_DOMAIN/integrations/youtube/callback
 YOUTUBE_TOKEN_PATH=/app/data/youtube-token.json
 YOUTUBE_DEFAULT_PRIVACY_STATUS=private
+YOUTUBE_PUBLISH_RETRY_LIMIT=3
+YOUTUBE_PUBLISH_RETRY_DELAY_SECONDS=300
 ```
 
 Полная инструкция: [`docs/youtube-setup.md`](docs/youtube-setup.md).
+
+## TikTok
+
+После обработки видео админ может отправить готовый MP4 в TikTok Inbox через официальный Content Posting API `video.upload`. Финальный шаг публикации пользователь завершает в приложении TikTok.
+
+Минимальные настройки:
+
+```env
+APP_BASE_URL=https://YOUR_DOMAIN
+TIKTOK_CLIENT_KEY=...
+TIKTOK_CLIENT_SECRET=...
+TIKTOK_REDIRECT_URI=https://YOUR_DOMAIN/integrations/tiktok/callback
+TIKTOK_SCOPES=video.upload
+TIKTOK_TOKEN_PATH=/app/data/tiktok-token.json
+```
+
+Полная инструкция: [`docs/tiktok-setup.md`](docs/tiktok-setup.md).
 
 ## Ручная инициализация
 
@@ -272,6 +294,5 @@ GitHub Actions автоматически запускает эти провер
 
 1. Добавить бренд-шаблоны клиента.
 2. Добавить точные word-level субтитры через провайдера с timestamps.
-3. Добавить автоматическое расписание YouTube-публикаций.
-4. Добавить Instagram Graph API после подготовки Meta App.
-5. Добавить TikTok Content Posting API после approval.
+3. Добавить Instagram Graph API после подготовки Meta App.
+4. Добавить TikTok direct post через `video.publish` после approval.
