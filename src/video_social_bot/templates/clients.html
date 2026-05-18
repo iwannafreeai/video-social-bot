@@ -9,13 +9,47 @@
   </section>
   <h2>Клиенты</h2>
   <table>
-    <thead><tr><th>ID</th><th>Имя</th><th>Кабинет</th></tr></thead>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Имя</th>
+        <th>Кабинет</th>
+        <th>Брендинг</th>
+      </tr>
+    </thead>
     <tbody>
       {% for client in clients %}
         <tr>
           <td>{{ client.id }}</td>
           <td>{{ client.name }}</td>
           <td><code>/client/{{ tokens[client.id] }}</code></td>
+          <td>
+            <form action="/clients/{{ client.id }}/branding" method="post">
+              <label>
+                Текст
+                <input name="watermark_text" value="{{ client.watermark_text or '' }}" placeholder="@brand">
+              </label>
+              <label>
+                Позиция
+                <select name="watermark_position">
+                  {% set position = client.watermark_position or "bottom-right" %}
+                  <option value="top-left" {% if position == "top-left" %}selected{% endif %}>top-left</option>
+                  <option value="top-right" {% if position == "top-right" %}selected{% endif %}>top-right</option>
+                  <option value="bottom-left" {% if position == "bottom-left" %}selected{% endif %}>bottom-left</option>
+                  <option value="bottom-right" {% if position == "bottom-right" %}selected{% endif %}>bottom-right</option>
+                </select>
+              </label>
+              <label>
+                Прозрачность %
+                <input name="watermark_opacity" type="number" min="0" max="100" value="{{ client.watermark_opacity if client.watermark_opacity is not none else 35 }}">
+              </label>
+              <label>
+                Размер
+                <input name="watermark_font_size" type="number" min="12" max="120" value="{{ client.watermark_font_size or 42 }}">
+              </label>
+              <button type="submit">Сохранить</button>
+            </form>
+          </td>
         </tr>
       {% endfor %}
     </tbody>
