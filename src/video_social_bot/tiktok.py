@@ -166,17 +166,30 @@ async def upload_tiktok_video_to_inbox(
             msg = "TikTok upload init response missing publish_id or upload_url"
             raise RuntimeError(msg)
 
-        content = video_path.read_bytes()
-        upload_response = await client.put(
-            upload_url,
-            headers={
-                "Content-Type": "video/mp4",
-                "Content-Length": str(video_size),
-                "Content-Range": f"bytes 0-{video_size - 1}/{video_size}",
-            },
-            content=content,
-        )
-        upload_response.raise_for_status()
+        start = 0
+        with video_path.open("rb") as video_file:
+            for chunk_index in range(total_chunk_count):
+                chunk = video_file.read(chunk_size)
+                if not chunk:
+                    break
+                end = start + len(chunk) - 1
+                upload_response = await client.put(
+                    upload_url,
+                    headers={
+                        "Content-Type": "video/mp4",
+                        "Content-Length": str(len(chunk)),
+                        "Content-Range": f"bytes {start}-{end}/{video_size}",
+                    },
+                    content=chunk,
+                )
+                upload_response.raise_for_status()
+                logger.debug(
+                    "TikTok upload chunk sent: publish_id=%s chunk=%s/%s",
+                    publish_id,
+                    chunk_index + 1,
+                    total_chunk_count,
+                )
+                start = end + 1
 
     logger.info("TikTok inbox upload completed: publish_id=%s", publish_id)
     return TikTokUploadResult(publish_id=publish_id, status="uploaded")

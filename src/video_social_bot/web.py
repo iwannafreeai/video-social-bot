@@ -18,6 +18,8 @@ from video_social_bot.enums import CaptionLanguage, JobStatus, UploadSource
 from video_social_bot.logging_config import configure_logging
 from video_social_bot.models import Client
 from video_social_bot.repositories import (
+    cancel_tiktok_upload,
+    cancel_youtube_publish,
     create_video_job,
     get_client,
     get_job,
@@ -26,6 +28,8 @@ from video_social_bot.repositories import (
     mark_tiktok_failed,
     mark_tiktok_uploaded,
     mark_youtube_published,
+    retry_youtube_publish,
+    schedule_tiktok_upload,
     schedule_youtube_publish,
     set_job_language,
     update_client_branding,
@@ -303,6 +307,34 @@ def create_app() -> FastAPI:
         await session.commit()
         return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
+    @app.post("/jobs/{job_id}/youtube/cancel")
+    async def cancel_job_youtube_publish(
+        request: Request,
+        job_id: int,
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        require_auth(request)
+        job = await get_job(session, job_id)
+        if job is None or job.youtube_publish_status not in {"scheduled", "failed"}:
+            raise HTTPException(status_code=404)
+        await cancel_youtube_publish(session, job)
+        await session.commit()
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.post("/jobs/{job_id}/youtube/retry")
+    async def retry_job_youtube_publish(
+        request: Request,
+        job_id: int,
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        require_auth(request)
+        job = await get_job(session, job_id)
+        if job is None or job.youtube_publish_status != "failed":
+            raise HTTPException(status_code=404)
+        await retry_youtube_publish(session, job)
+        await session.commit()
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
     @app.post("/jobs/{job_id}/tiktok")
     async def upload_job_to_tiktok(
         request: Request,
@@ -323,6 +355,44 @@ def create_app() -> FastAPI:
             await session.commit()
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         await mark_tiktok_uploaded(session, job, result.publish_id)
+        await session.commit()
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.post("/jobs/{job_id}/tiktok/schedule")
+    async def schedule_job_to_tiktok(
+        request: Request,
+        job_id: int,
+        scheduled_at: str = Form(...),
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        require_auth(request)
+        settings = require_settings()
+        if not tiktok_configured(settings) or not tiktok_connected(settings):
+            raise HTTPException(status_code=400, detail="TikTok account is not connected")
+        job = await get_job(session, job_id)
+        if job is None or job.status != JobStatus.READY or not job.processed_file_path:
+            raise HTTPException(status_code=404)
+        try:
+            parsed_scheduled_at = datetime.fromisoformat(scheduled_at)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid scheduled_at") from None
+        if parsed_scheduled_at.tzinfo is None:
+            parsed_scheduled_at = parsed_scheduled_at.replace(tzinfo=UTC)
+        await schedule_tiktok_upload(session, job, parsed_scheduled_at)
+        await session.commit()
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.post("/jobs/{job_id}/tiktok/cancel")
+    async def cancel_job_tiktok_upload(
+        request: Request,
+        job_id: int,
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        require_auth(request)
+        job = await get_job(session, job_id)
+        if job is None or job.tiktok_publish_status not in {"scheduled", "failed"}:
+            raise HTTPException(status_code=404)
+        await cancel_tiktok_upload(session, job)
         await session.commit()
         return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
