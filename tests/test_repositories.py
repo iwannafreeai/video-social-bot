@@ -12,6 +12,7 @@ from video_social_bot.repositories import (
     create_video_job,
     due_tiktok_upload_jobs,
     due_youtube_publish_jobs,
+    list_jobs,
     retry_youtube_publish,
     schedule_tiktok_upload,
     schedule_youtube_publish,
@@ -80,4 +81,38 @@ async def test_tiktok_upload_schedule_and_cancel() -> None:
         await cancel_tiktok_upload(session, job)
         assert job.tiktok_publish_status is None
         assert job.tiktok_published_at is None
+    await engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_list_jobs_filters_by_status_client_and_source() -> None:
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    engine = create_engine(settings)
+    await create_schema(engine)
+    session_factory = create_session_factory(engine)
+    async with session_factory() as session:
+        client_job = await create_video_job(
+            session,
+            settings,
+            Path("client.mp4"),
+            UploadSource.CLIENT_PORTAL,
+            client_id=123,
+        )
+        client_job.status = JobStatus.READY
+        dashboard_job = await create_video_job(
+            session,
+            settings,
+            Path("dashboard.mp4"),
+            UploadSource.DASHBOARD,
+        )
+        dashboard_job.status = JobStatus.FAILED
+        await session.commit()
+
+        ready_jobs = await list_jobs(session, status=JobStatus.READY)
+        client_jobs = await list_jobs(session, client_id=123)
+        portal_jobs = await list_jobs(session, source=UploadSource.CLIENT_PORTAL)
+
+        assert [job.id for job in ready_jobs] == [client_job.id]
+        assert [job.id for job in client_jobs] == [client_job.id]
+        assert [job.id for job in portal_jobs] == [client_job.id]
     await engine.dispose()

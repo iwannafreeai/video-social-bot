@@ -14,18 +14,77 @@
     </form>
   </section>
 
+  <section class="card">
+    <h2>Статистика</h2>
+    <p>
+      Всего: <strong>{{ stats.total }}</strong>
+      · В очереди: <strong>{{ stats.queued }}</strong>
+      · Обработка: <strong>{{ stats.processing }}</strong>
+      · Готово: <strong>{{ stats.ready }}</strong>
+      · Ошибки: <strong>{{ stats.failed }}</strong>
+      · YouTube: <strong>{{ stats.youtube }}</strong>
+      · TikTok: <strong>{{ stats.tiktok }}</strong>
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>Фильтры</h2>
+    <form action="/" method="get">
+      <label>Статус
+        <select name="status">
+          <option value="">Все</option>
+          {% for status in job_statuses %}
+            <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Клиент
+        <select name="client_id">
+          <option value="">Все</option>
+          {% for client in clients %}
+            <option value="{{ client.id }}" {% if selected_client_id == client.id %}selected{% endif %}>{{ client.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Источник
+        <select name="source">
+          <option value="">Все</option>
+          {% for source in upload_sources %}
+            <option value="{{ source }}" {% if selected_source == source %}selected{% endif %}>{{ source }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">Применить</button>
+      <a href="/">Сбросить</a>
+    </form>
+  </section>
+
   <h2>Задачи</h2>
   <table>
     <thead>
-      <tr><th>ID</th><th>Статус</th><th>Язык</th><th>Источник</th><th>Создано</th><th>Действия</th></tr>
+      <tr>
+        <th>ID</th>
+        <th>Статус</th>
+        <th>Клиент</th>
+        <th>Язык</th>
+        <th>Источник</th>
+        <th>Публикации</th>
+        <th>Создано</th>
+        <th>Действия</th>
+      </tr>
     </thead>
     <tbody>
       {% for job in jobs %}
         <tr>
           <td>#{{ job.id }}</td>
           <td><span class="badge">{{ job.status }}</span></td>
+          <td>{{ client_names.get(job.client_id, "-") if job.client_id else "-" }}</td>
           <td>{{ job.language or "-" }}</td>
           <td>{{ job.source }}</td>
+          <td>
+            YouTube: {{ job.youtube_publish_status or ("published" if job.youtube_video_id else "-") }}<br>
+            TikTok: {{ job.tiktok_publish_status or "-" }}
+          </td>
           <td>{{ job.created_at }}</td>
           <td><a href="/jobs/{{ job.id }}">Открыть</a></td>
         </tr>

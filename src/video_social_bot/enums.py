@@ -18,3 +18,4 @@ class JobStatus(StrEnum):
 class UploadSource(StrEnum):
     TELEGRAM = "telegram"
     DASHBOARD = "dashboard"
+    CLIENT_PORTAL = "client_portal"

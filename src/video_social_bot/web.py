@@ -16,7 +16,7 @@ from video_social_bot.config import Settings, get_settings
 from video_social_bot.db import create_engine, create_schema, create_session_factory
 from video_social_bot.enums import CaptionLanguage, JobStatus, UploadSource
 from video_social_bot.logging_config import configure_logging
-from video_social_bot.models import Client
+from video_social_bot.models import Client, VideoJob
 from video_social_bot.repositories import (
     cancel_tiktok_upload,
     cancel_youtube_publish,
@@ -98,6 +98,60 @@ def client_token_serializer() -> URLSafeSerializer:
     return URLSafeSerializer(settings.secret_key, salt="client-token")
 
 
+def parse_client_token(token: str) -> int:
+    try:
+        payload = client_token_serializer().loads(token)
+        return int(payload["client_id"])
+    except (BadSignature, KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=404) from None
+
+
+def job_stats(jobs: list[VideoJob]) -> dict[str, int]:
+    total = len(jobs)
+    ready = sum(1 for job in jobs if job.status == JobStatus.READY)
+    failed = sum(1 for job in jobs if job.status == JobStatus.FAILED)
+    queued = sum(1 for job in jobs if job.status == JobStatus.QUEUED)
+    processing = sum(1 for job in jobs if job.status == JobStatus.PROCESSING)
+    youtube = sum(1 for job in jobs if job.youtube_video_id)
+    tiktok = sum(1 for job in jobs if job.tiktok_publish_id)
+    return {
+        "total": total,
+        "ready": ready,
+        "failed": failed,
+        "queued": queued,
+        "processing": processing,
+        "youtube": youtube,
+        "tiktok": tiktok,
+    }
+
+
+def parse_optional_job_status(value: str) -> JobStatus | None:
+    if not value:
+        return None
+    try:
+        return JobStatus(value)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job status") from None
+
+
+def parse_optional_upload_source(value: str) -> UploadSource | None:
+    if not value:
+        return None
+    try:
+        return UploadSource(value)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid upload source") from None
+
+
+def parse_optional_client_id(value: str) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid client_id") from None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
@@ -130,17 +184,37 @@ def create_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def index(
         request: Request,
+        status: str = "",
+        client_id: str = "",
+        source: str = "",
         session: AsyncSession = Depends(get_session),
     ) -> HTMLResponse:
         require_auth(request)
-        jobs = await list_jobs(session)
+        selected_status = parse_optional_job_status(status)
+        selected_client_id = parse_optional_client_id(client_id)
+        selected_source = parse_optional_upload_source(source)
+        jobs = await list_jobs(
+            session,
+            status=selected_status,
+            client_id=selected_client_id,
+            source=selected_source,
+        )
+        all_jobs = await list_jobs(session)
         clients = await list_clients(session)
+        client_names = {client.id: client.name for client in clients}
         return templates.TemplateResponse(
             request,
             "index.html",
             {
                 "jobs": jobs,
                 "clients": clients,
+                "client_names": client_names,
+                "stats": job_stats(all_jobs),
+                "selected_status": selected_status,
+                "selected_client_id": selected_client_id,
+                "selected_source": selected_source,
+                "job_statuses": list(JobStatus),
+                "upload_sources": list(UploadSource),
                 "settings": require_settings(),
                 "youtube_connected": youtube_connected(require_settings()),
                 "youtube_configured": youtube_configured(require_settings()),
@@ -181,24 +255,45 @@ def create_app() -> FastAPI:
     ) -> RedirectResponse:
         require_auth(request)
         settings = require_settings()
+        logger.info(
+            "Dashboard upload started: filename=%s",
+            file.filename,
+        )
+        try:
+            job = await create_uploaded_job(
+                session=session,
+                settings=settings,
+                file=file,
+                language=language,
+                source=UploadSource.DASHBOARD,
+                client_id=None,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        await session.commit()
+        logger.info("Dashboard job created: job_id=%s language=%s", job.id, language)
+        return RedirectResponse("/", status_code=303)
+
+    async def create_uploaded_job(
+        session: AsyncSession,
+        settings: Settings,
+        file: UploadFile,
+        language: CaptionLanguage,
+        source: UploadSource,
+        client_id: int | None,
+    ) -> VideoJob:
         suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
         destination = new_storage_path(settings, "incoming", suffix)
-        logger.info(
-            "Dashboard upload started: filename=%s destination=%s",
-            file.filename,
-            destination,
-        )
         await save_upload_file(file, destination, settings.max_upload_mb * 1024 * 1024)
         job = await create_video_job(
             session=session,
             settings=settings,
             original_file_path=destination,
-            source=UploadSource.DASHBOARD,
+            source=source,
+            client_id=client_id,
         )
         await set_job_language(session, job.id, language)
-        await session.commit()
-        logger.info("Dashboard job created: job_id=%s language=%s", job.id, language)
-        return RedirectResponse("/", status_code=303)
+        return job
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     async def job_detail(
@@ -534,16 +629,86 @@ def create_app() -> FastAPI:
         token: str,
         session: AsyncSession = Depends(get_session),
     ) -> HTMLResponse:
-        try:
-            payload = client_token_serializer().loads(token)
-            client_id = int(payload["client_id"])
-        except (BadSignature, KeyError, TypeError, ValueError):
-            raise HTTPException(status_code=404) from None
+        client_id = parse_client_token(token)
         client = await get_client(session, client_id)
         if client is None:
             raise HTTPException(status_code=404)
         jobs = await list_jobs(session, client_id=client_id)
-        return templates.TemplateResponse(request, "client.html", {"client": client, "jobs": jobs})
+        return templates.TemplateResponse(
+            request,
+            "client.html",
+            {
+                "client": client,
+                "jobs": jobs,
+                "token": token,
+                "settings": require_settings(),
+                "stats": job_stats(jobs),
+            },
+        )
+
+    @app.post("/client/{token}/jobs")
+    async def create_client_job(
+        request: Request,
+        token: str,
+        file: UploadFile,
+        language: CaptionLanguage = Form(...),
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        client_id = parse_client_token(token)
+        client = await get_client(session, client_id)
+        if client is None:
+            raise HTTPException(status_code=404)
+        settings = require_settings()
+        try:
+            job = await create_uploaded_job(
+                session=session,
+                settings=settings,
+                file=file,
+                language=language,
+                source=UploadSource.CLIENT_PORTAL,
+                client_id=client.id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        await session.commit()
+        logger.info("Client portal job created: client_id=%s job_id=%s", client.id, job.id)
+        return RedirectResponse(f"/client/{token}", status_code=303)
+
+    @app.get("/client/{token}/jobs/{job_id}/download")
+    async def download_client_job(
+        request: Request,
+        token: str,
+        job_id: int,
+        session: AsyncSession = Depends(get_session),
+    ) -> FileResponse:
+        client_id = parse_client_token(token)
+        job = await get_job(session, job_id)
+        if (
+            job is None
+            or job.client_id != client_id
+            or job.status != JobStatus.READY
+            or not job.processed_file_path
+        ):
+            raise HTTPException(status_code=404)
+        return FileResponse(job.processed_file_path, filename=f"processed-{job.id}.mp4")
+
+    @app.get("/client/{token}/jobs/{job_id}/subtitles")
+    async def download_client_subtitles(
+        request: Request,
+        token: str,
+        job_id: int,
+        session: AsyncSession = Depends(get_session),
+    ) -> FileResponse:
+        client_id = parse_client_token(token)
+        job = await get_job(session, job_id)
+        if (
+            job is None
+            or job.client_id != client_id
+            or job.status != JobStatus.READY
+            or not job.subtitle_file_path
+        ):
+            raise HTTPException(status_code=404)
+        return FileResponse(job.subtitle_file_path, filename=f"subtitles-{job.id}.srt")
 
     return app
 
