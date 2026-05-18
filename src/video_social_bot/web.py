@@ -2,6 +2,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile
@@ -22,11 +23,23 @@ from video_social_bot.repositories import (
     get_job,
     list_clients,
     list_jobs,
+    mark_tiktok_failed,
+    mark_tiktok_uploaded,
     mark_youtube_published,
+    schedule_youtube_publish,
     set_job_language,
     update_client_branding,
 )
 from video_social_bot.storage import ensure_storage_dirs, new_storage_path, save_upload_file
+from video_social_bot.tiktok import (
+    build_tiktok_auth_url,
+    exchange_tiktok_code,
+    fetch_tiktok_publish_status,
+    save_tiktok_token,
+    tiktok_configured,
+    tiktok_connected,
+    upload_tiktok_video_to_inbox,
+)
 from video_social_bot.worker import JobWorker
 from video_social_bot.youtube import (
     build_youtube_auth_url,
@@ -127,6 +140,8 @@ def create_app() -> FastAPI:
                 "settings": require_settings(),
                 "youtube_connected": youtube_connected(require_settings()),
                 "youtube_configured": youtube_configured(require_settings()),
+                "tiktok_connected": tiktok_connected(require_settings()),
+                "tiktok_configured": tiktok_configured(require_settings()),
             },
         )
 
@@ -162,8 +177,6 @@ def create_app() -> FastAPI:
     ) -> RedirectResponse:
         require_auth(request)
         settings = require_settings()
-        if youtube_connected(settings):
-            return RedirectResponse("/", status_code=303)
         suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
         destination = new_storage_path(settings, "incoming", suffix)
         logger.info(
@@ -194,8 +207,6 @@ def create_app() -> FastAPI:
         if job is None:
             raise HTTPException(status_code=404)
         settings = require_settings()
-        if not youtube_configured(settings):
-            raise HTTPException(status_code=400, detail="YouTube OAuth is not configured")
         return templates.TemplateResponse(
             request,
             "job.html",
@@ -204,6 +215,8 @@ def create_app() -> FastAPI:
                 "settings": settings,
                 "youtube_connected": youtube_connected(settings),
                 "youtube_configured": youtube_configured(settings),
+                "tiktok_connected": tiktok_connected(settings),
+                "tiktok_configured": tiktok_configured(settings),
             },
         )
 
@@ -216,6 +229,35 @@ def create_app() -> FastAPI:
         state_token = client_token_serializer().dumps({"integration": "youtube"})
         request.session["youtube_oauth_state"] = state_token
         return RedirectResponse(build_youtube_auth_url(settings, state_token), status_code=303)
+
+    @app.get("/integrations/tiktok/connect")
+    async def connect_tiktok(request: Request) -> RedirectResponse:
+        require_auth(request)
+        settings = require_settings()
+        if not tiktok_configured(settings):
+            raise HTTPException(status_code=400, detail="TikTok OAuth is not configured")
+        state_token = client_token_serializer().dumps({"integration": "tiktok"})
+        request.session["tiktok_oauth_state"] = state_token
+        return RedirectResponse(build_tiktok_auth_url(settings, state_token), status_code=303)
+
+    @app.get("/integrations/tiktok/callback")
+    async def tiktok_callback(
+        request: Request,
+        code: str,
+        state: str,
+    ) -> RedirectResponse:
+        require_auth(request)
+        stored_state = request.session.get("tiktok_oauth_state")
+        if not isinstance(stored_state, str) or state != stored_state:
+            raise HTTPException(status_code=400, detail="Invalid TikTok OAuth state")
+        settings = require_settings()
+        if not tiktok_configured(settings):
+            raise HTTPException(status_code=400, detail="TikTok OAuth is not configured")
+        token = await exchange_tiktok_code(settings, code)
+        save_tiktok_token(settings, token)
+        request.session.pop("tiktok_oauth_state", None)
+        logger.info("TikTok account connected")
+        return RedirectResponse("/", status_code=303)
 
     @app.get("/integrations/youtube/callback")
     async def youtube_callback(
@@ -258,6 +300,80 @@ def create_app() -> FastAPI:
             privacy_status=privacy_status,
         )
         await mark_youtube_published(session, job, video_id)
+        await session.commit()
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.post("/jobs/{job_id}/tiktok")
+    async def upload_job_to_tiktok(
+        request: Request,
+        job_id: int,
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        require_auth(request)
+        settings = require_settings()
+        if not tiktok_configured(settings) or not tiktok_connected(settings):
+            raise HTTPException(status_code=400, detail="TikTok account is not connected")
+        job = await get_job(session, job_id)
+        if job is None or job.status != JobStatus.READY or not job.processed_file_path:
+            raise HTTPException(status_code=404)
+        try:
+            result = await upload_tiktok_video_to_inbox(settings, Path(job.processed_file_path))
+        except Exception as exc:
+            await mark_tiktok_failed(session, job, str(exc))
+            await session.commit()
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        await mark_tiktok_uploaded(session, job, result.publish_id)
+        await session.commit()
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.post("/jobs/{job_id}/tiktok/status")
+    async def refresh_job_tiktok_status(
+        request: Request,
+        job_id: int,
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        require_auth(request)
+        settings = require_settings()
+        if not tiktok_configured(settings) or not tiktok_connected(settings):
+            raise HTTPException(status_code=400, detail="TikTok account is not connected")
+        job = await get_job(session, job_id)
+        if job is None or not job.tiktok_publish_id:
+            raise HTTPException(status_code=404)
+        try:
+            job.tiktok_publish_status = await fetch_tiktok_publish_status(
+                settings,
+                job.tiktok_publish_id,
+            )
+            job.tiktok_publish_error = None
+        except Exception as exc:
+            await mark_tiktok_failed(session, job, str(exc))
+        await session.commit()
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.post("/jobs/{job_id}/youtube/schedule")
+    async def schedule_job_to_youtube(
+        request: Request,
+        job_id: int,
+        scheduled_at: str = Form(...),
+        privacy_status: str = Form(...),
+        session: AsyncSession = Depends(get_session),
+    ) -> RedirectResponse:
+        require_auth(request)
+        if privacy_status not in {"private", "unlisted", "public"}:
+            raise HTTPException(status_code=400, detail="Invalid YouTube privacy status")
+        settings = require_settings()
+        if not youtube_configured(settings) or not youtube_connected(settings):
+            raise HTTPException(status_code=400, detail="YouTube account is not connected")
+        job = await get_job(session, job_id)
+        if job is None or job.status != JobStatus.READY or not job.processed_file_path:
+            raise HTTPException(status_code=404)
+        try:
+            parsed_scheduled_at = datetime.fromisoformat(scheduled_at)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid scheduled_at") from None
+        if parsed_scheduled_at.tzinfo is None:
+            parsed_scheduled_at = parsed_scheduled_at.replace(tzinfo=UTC)
+        await schedule_youtube_publish(session, job, parsed_scheduled_at, privacy_status)
         await session.commit()
         return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 

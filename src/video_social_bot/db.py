@@ -17,6 +17,25 @@ SQLITE_MIGRATIONS = {
         "subtitle_file_path": "ALTER TABLE video_jobs ADD COLUMN subtitle_file_path TEXT",
         "youtube_video_id": "ALTER TABLE video_jobs ADD COLUMN youtube_video_id VARCHAR(64)",
         "youtube_published_at": "ALTER TABLE video_jobs ADD COLUMN youtube_published_at DATETIME",
+        "youtube_publish_status": (
+            "ALTER TABLE video_jobs ADD COLUMN youtube_publish_status VARCHAR(32)"
+        ),
+        "youtube_publish_privacy": (
+            "ALTER TABLE video_jobs ADD COLUMN youtube_publish_privacy VARCHAR(16)"
+        ),
+        "youtube_publish_scheduled_at": (
+            "ALTER TABLE video_jobs ADD COLUMN youtube_publish_scheduled_at DATETIME"
+        ),
+        "youtube_publish_attempts": (
+            "ALTER TABLE video_jobs ADD COLUMN youtube_publish_attempts INTEGER DEFAULT 0"
+        ),
+        "youtube_publish_error": "ALTER TABLE video_jobs ADD COLUMN youtube_publish_error TEXT",
+        "tiktok_publish_id": "ALTER TABLE video_jobs ADD COLUMN tiktok_publish_id VARCHAR(128)",
+        "tiktok_publish_status": (
+            "ALTER TABLE video_jobs ADD COLUMN tiktok_publish_status VARCHAR(64)"
+        ),
+        "tiktok_published_at": "ALTER TABLE video_jobs ADD COLUMN tiktok_published_at DATETIME",
+        "tiktok_publish_error": "ALTER TABLE video_jobs ADD COLUMN tiktok_publish_error TEXT",
     },
     "clients": {
         "watermark_text": "ALTER TABLE clients ADD COLUMN watermark_text VARCHAR(120)",

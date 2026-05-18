@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     youtube_scopes: str = "https://www.googleapis.com/auth/youtube.upload"
     youtube_token_path: Path = Path("./data/youtube-token.json")
     youtube_default_privacy_status: str = "private"
+    youtube_publish_retry_limit: int = Field(default=3, ge=0, le=10)
+    youtube_publish_retry_delay_seconds: int = Field(default=300, ge=30, le=86400)
+    tiktok_client_key: str = ""
+    tiktok_client_secret: str = ""
+    tiktok_redirect_uri: str = ""
+    tiktok_scopes: str = "video.upload"
+    tiktok_token_path: Path = Path("./data/tiktok-token.json")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
