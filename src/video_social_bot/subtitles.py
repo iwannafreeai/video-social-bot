@@ -59,6 +59,31 @@ def build_subtitle_cues(
     return cues
 
 
+def build_segment_subtitle_cues(
+    segments: list[tuple[float, float, str]],
+    max_chars: int,
+) -> list[SubtitleCue]:
+    cues: list[SubtitleCue] = []
+    for start_seconds, end_seconds, text in segments:
+        chunks = split_transcript(text, max_chars)
+        if not chunks:
+            continue
+        safe_end_seconds = max(end_seconds, start_seconds + 0.5)
+        cue_duration = (safe_end_seconds - start_seconds) / len(chunks)
+        for chunk_index, chunk in enumerate(chunks):
+            cue_start = start_seconds + (chunk_index * cue_duration)
+            cue_end = min(cue_start + cue_duration, safe_end_seconds)
+            cues.append(
+                SubtitleCue(
+                    index=len(cues) + 1,
+                    start_seconds=cue_start,
+                    end_seconds=cue_end,
+                    text=chunk,
+                ),
+            )
+    return cues
+
+
 def render_srt(cues: list[SubtitleCue]) -> str:
     blocks = [
         "\n".join(
@@ -74,14 +99,21 @@ def render_srt(cues: list[SubtitleCue]) -> str:
     return "\n\n".join(blocks) + ("\n" if blocks else "")
 
 
-def write_srt_file(settings: Settings, transcript: str, duration_seconds: float) -> Path | None:
+def write_srt_file(
+    settings: Settings,
+    transcript: str,
+    duration_seconds: float,
+    segments: list[tuple[float, float, str]] | None = None,
+) -> Path | None:
     if not settings.subtitles_enabled:
         return None
-    cues = build_subtitle_cues(
-        transcript=transcript,
-        duration_seconds=duration_seconds,
-        max_chars=settings.subtitle_max_chars,
-    )
+    cues = build_segment_subtitle_cues(segments, settings.subtitle_max_chars) if segments else []
+    if not cues:
+        cues = build_subtitle_cues(
+            transcript=transcript,
+            duration_seconds=duration_seconds,
+            max_chars=settings.subtitle_max_chars,
+        )
     if not cues:
         return None
     output_path = new_storage_path(settings, "subtitles", ".srt")

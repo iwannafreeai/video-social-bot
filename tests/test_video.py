@@ -1,6 +1,10 @@
 from video_social_bot.config import Settings
 from video_social_bot.models import Client
-from video_social_bot.video import resolve_watermark_settings, watermark_filter
+from video_social_bot.video import (
+    remaster_filter_chain,
+    resolve_watermark_settings,
+    watermark_filter,
+)
 
 
 def test_watermark_filter_disabled_by_default() -> None:
@@ -50,3 +54,12 @@ def test_global_watermark_used_when_client_branding_empty() -> None:
 
     assert watermark is not None
     assert watermark.text == "@global"
+
+
+def test_remaster_filter_chain_uses_configured_output_size() -> None:
+    settings = Settings(output_width=720, output_height=1280)
+
+    filters = remaster_filter_chain(settings)
+
+    assert "scale=720:1280" in filters
+    assert "pad=720:1280" in filters

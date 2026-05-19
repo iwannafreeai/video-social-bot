@@ -5,6 +5,7 @@ MVP для Telegram-бота и лёгкого FastAPI-дэшборда:
 - загрузка вертикальных shorts/reels/tiktok-видео до 100 МБ;
 - FFmpeg-ремастеринг в 9:16 с компрессией;
 - транскрибация аудио через OpenAI Whisper API;
+- более точные SRT-субтитры по Whisper segment timestamps;
 - генерация подписи на русском или английском через OpenAI-compatible LLM API;
 - админка и клиентский кабинет;
 - SQLite без отдельной БД;
@@ -61,6 +62,9 @@ WATERMARK_TEXT=@your_brand
 WATERMARK_POSITION=bottom-right
 SUBTITLES_ENABLED=true
 BURN_SUBTITLES=false
+OUTPUT_WIDTH=1080
+OUTPUT_HEIGHT=1920
+AUDIO_NORMALIZE=true
 ```
 
 Собрать и запустить:
@@ -214,7 +218,21 @@ SUBTITLE_FONT_SIZE=44
 - `SUBTITLES_ENABLED=true`, `BURN_SUBTITLES=true` — `.srt` файл + субтитры вшиваются в видео через FFmpeg.
 - `SUBTITLES_ENABLED=false` — субтитры не создаются.
 
-В MVP тайминги SRT распределяются равномерно по длительности видео на основе текста транскрипта. Для более точных word-level таймингов нужен провайдер транскрибации с timestamps.
+Whisper вызывается в `verbose_json` с segment timestamps, поэтому SRT строится по фактическим сегментам речи. Если провайдер не вернул сегменты, приложение использует fallback: равномерно распределяет текст по длительности видео.
+
+## Качество видео и звук
+
+Основные параметры FFmpeg:
+
+```env
+OUTPUT_WIDTH=1080
+OUTPUT_HEIGHT=1920
+OUTPUT_CRF=28
+OUTPUT_AUDIO_BITRATE=96k
+AUDIO_NORMALIZE=true
+```
+
+`OUTPUT_WIDTH`/`OUTPUT_HEIGHT` должны быть чётными. Для слабого VPS можно снизить до `720x1280`, чтобы ускорить обработку и уменьшить размер файла. `AUDIO_NORMALIZE=true` нормализует аудио при извлечении дорожки для Whisper.
 
 ## YouTube Shorts
 

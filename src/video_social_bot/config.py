@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     ffmpeg_preset: str = "veryfast"
     output_crf: int = Field(default=28, ge=18, le=35)
     output_audio_bitrate: str = "96k"
+    output_width: int = Field(default=1080, ge=360, le=2160)
+    output_height: int = Field(default=1920, ge=640, le=3840)
+    audio_normalize: bool = True
     watermark_text: str = ""
     watermark_font_size: int = Field(default=42, ge=12, le=120)
     watermark_opacity: float = Field(default=0.35, ge=0, le=1)
@@ -95,6 +98,14 @@ class Settings(BaseSettings):
     def validate_youtube_default_privacy_status(cls, value: str) -> str:
         if value not in {"private", "unlisted", "public"}:
             msg = "YOUTUBE_DEFAULT_PRIVACY_STATUS must be private, unlisted, or public"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("output_width", "output_height")
+    @classmethod
+    def validate_even_dimension(cls, value: int) -> int:
+        if value % 2 != 0:
+            msg = "Output dimensions must be even"
             raise ValueError(msg)
         return value
 

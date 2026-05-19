@@ -189,13 +189,20 @@ class JobWorker:
 
         try:
             audio_path = await extract_audio(self._settings, input_path)
-            transcript = await TranscriptionClient(self._settings).transcribe(audio_path)
-            caption = await CaptionClient(self._settings).generate_caption(transcript, job.language)
+            transcription = await TranscriptionClient(self._settings).transcribe(audio_path)
+            caption = await CaptionClient(self._settings).generate_caption(
+                transcription.text,
+                job.language,
+            )
             probe = await probe_video(input_path)
             subtitle_path = write_srt_file(
                 self._settings,
-                transcript,
+                transcription.text,
                 duration_seconds=probe.duration_seconds,
+                segments=[
+                    (segment.start_seconds, segment.end_seconds, segment.text)
+                    for segment in transcription.segments
+                ],
             )
             processed_path = await remaster_video(self._settings, input_path, subtitle_path, client)
         except Exception as exc:
@@ -212,7 +219,14 @@ class JobWorker:
             ready_job = await get_job(session, job_id)
             if ready_job is None:
                 return
-            await mark_ready(session, ready_job, processed_path, subtitle_path, transcript, caption)
+            await mark_ready(
+                session,
+                ready_job,
+                processed_path,
+                subtitle_path,
+                transcription.text,
+                caption,
+            )
             await session.commit()
             logger.info("Job #%s ready: %s", job_id, processed_path)
             await self._notify_ready(

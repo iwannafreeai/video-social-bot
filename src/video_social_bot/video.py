@@ -78,22 +78,23 @@ async def probe_video(path: Path) -> VideoProbe:
 async def extract_audio(settings: Settings, input_path: Path) -> Path:
     output_path = new_storage_path(settings, "audio", ".mp3")
     logger.info("Extracting audio: input=%s output=%s", input_path, output_path)
-    await run_command(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(input_path),
-            "-vn",
-            "-ac",
-            "1",
-            "-ar",
-            "16000",
-            "-b:a",
-            "64k",
-            str(output_path),
-        ],
-    )
+    args = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(input_path),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-b:a",
+        "64k",
+    ]
+    if settings.audio_normalize:
+        args.extend(["-af", "loudnorm=I=-16:TP=-1.5:LRA=11"])
+    args.append(str(output_path))
+    await run_command(args)
     logger.info("Audio extracted: %s", output_path)
     return output_path
 
@@ -176,16 +177,16 @@ def watermark_filter(settings: Settings, client: Client | None = None) -> str | 
     )
 
 
-async def remaster_video(
+def remaster_filter_chain(
     settings: Settings,
-    input_path: Path,
     subtitle_path: Path | None = None,
     client: Client | None = None,
-) -> Path:
-    output_path = new_storage_path(settings, "processed", ".mp4")
+) -> str:
+    width = settings.output_width
+    height = settings.output_height
     filter_parts = [
-        "scale=1080:1920:force_original_aspect_ratio=decrease",
-        "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black",
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease",
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black",
         "eq=contrast=1.03:saturation=1.04:brightness=0.01",
         "setsar=1",
     ]
@@ -195,11 +196,25 @@ async def remaster_video(
     subtitle_filter = subtitles_filter(settings, subtitle_path)
     if subtitle_filter is not None:
         filter_parts.append(subtitle_filter)
-    filters = ",".join(filter_parts)
+    return ",".join(filter_parts)
+
+
+async def remaster_video(
+    settings: Settings,
+    input_path: Path,
+    subtitle_path: Path | None = None,
+    client: Client | None = None,
+) -> Path:
+    output_path = new_storage_path(settings, "processed", ".mp4")
+    watermark = watermark_filter(settings, client)
+    subtitle_filter = subtitles_filter(settings, subtitle_path)
+    filters = remaster_filter_chain(settings, subtitle_path, client)
     logger.info(
-        "Remastering video: input=%s output=%s watermark=%s subtitles=%s",
+        "Remastering video: input=%s output=%s size=%sx%s watermark=%s subtitles=%s",
         input_path,
         output_path,
+        settings.output_width,
+        settings.output_height,
         bool(watermark),
         bool(subtitle_filter),
     )
