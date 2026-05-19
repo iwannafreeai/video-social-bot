@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -9,6 +10,19 @@ from video_social_bot.enums import CaptionLanguage
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class TranscriptSegment:
+    start_seconds: float
+    end_seconds: float
+    text: str
+
+
+@dataclass(frozen=True)
+class TranscriptionResult:
+    text: str
+    segments: list[TranscriptSegment]
+
+
 class TranscriptionClient:
     def __init__(self, settings: Settings) -> None:
         if not settings.openai_api_key:
@@ -17,17 +31,31 @@ class TranscriptionClient:
         self._settings = settings
         self._client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-    async def transcribe(self, audio_path: Path) -> str:
+    async def transcribe(self, audio_path: Path) -> TranscriptionResult:
         logger.info("Starting Whisper transcription: %s", audio_path)
         with audio_path.open("rb") as audio_file:
             result = await self._client.audio.transcriptions.create(
                 model=self._settings.whisper_model,
                 file=audio_file,
-                response_format="text",
+                response_format="verbose_json",
+                timestamp_granularities=["segment"],
             )
-        transcript = str(result).strip()
-        logger.info("Whisper transcription complete: chars=%s", len(transcript))
-        return transcript
+        transcript = result.text.strip()
+        segments = [
+            TranscriptSegment(
+                start_seconds=segment.start,
+                end_seconds=segment.end,
+                text=segment.text.strip(),
+            )
+            for segment in result.segments or []
+            if segment.text.strip()
+        ]
+        logger.info(
+            "Whisper transcription complete: chars=%s segments=%s",
+            len(transcript),
+            len(segments),
+        )
+        return TranscriptionResult(text=transcript, segments=segments)
 
 
 class CaptionClient:
