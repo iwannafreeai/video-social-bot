@@ -86,13 +86,20 @@ docker compose logs -f web
 docker compose logs -f bot
 ```
 
+Healthcheck:
+
+```bash
+curl -fsS http://127.0.0.1:8000/health
+docker compose ps
+```
+
 Остановить:
 
 ```bash
 docker compose down
 ```
 
-Данные SQLite и видео хранятся в Docker volumes `app-data` и `app-storage`.
+Данные SQLite и видео хранятся в Docker volumes `app-data` и `app-storage`. Для backup/restore используй `./scripts/backup.sh` и `./scripts/restore.sh`.
 
 Для YouTube-загрузки используй инструкцию: [`docs/youtube-setup.md`](docs/youtube-setup.md).
 
