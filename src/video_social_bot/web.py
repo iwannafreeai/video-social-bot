@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeSerializer
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -181,6 +182,23 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
+    @app.get("/health")
+    async def health(session: AsyncSession = Depends(get_session)) -> dict[str, object]:
+        settings = require_settings()
+        await session.execute(text("SELECT 1"))
+        storage_exists = settings.storage_dir.exists()
+        data_path = Path(settings.database_url.removeprefix("sqlite+aiosqlite:///"))
+        database_ready = not settings.database_url.startswith("sqlite+aiosqlite:///") or (
+            data_path == Path(":memory:") or data_path.exists()
+        )
+        return {
+            "status": "ok",
+            "database": "ok" if database_ready else "missing",
+            "storage": "ok" if storage_exists else "missing",
+            "worker": "enabled" if settings.web_worker_enabled else "external",
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
     @app.get("/", response_class=HTMLResponse)
     async def index(
         request: Request,
@@ -227,7 +245,7 @@ def create_app() -> FastAPI:
     async def login_form(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "login.html", {"error": ""})
 
-    @app.post("/login")
+    @app.post("/login", response_model=None)
     async def login(
         request: Request,
         username: str = Form(...),

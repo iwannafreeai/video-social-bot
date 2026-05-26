@@ -54,6 +54,15 @@ Open:
 http://SERVER_IP:8000
 ```
 
+Healthcheck:
+
+```bash
+curl -fsS http://127.0.0.1:8000/health
+docker compose ps
+```
+
+The `web` service has a Docker healthcheck. The `bot` service waits until `web` is healthy before starting.
+
 ## 4. Logs
 
 ```bash
@@ -93,13 +102,42 @@ Docker volumes:
 - `video-social-bot_app-data` — SQLite database
 - `video-social-bot_app-storage` — uploaded and processed files
 
-Backup example:
+Set a stable Compose project name in `.env` so volume names stay predictable:
+
+```env
+COMPOSE_PROJECT_NAME=video-social-bot
+```
+
+Create a backup:
 
 ```bash
-mkdir -p backups
-docker run --rm -v video-social-bot_app-data:/data -v "$PWD/backups:/backup" alpine tar czf /backup/app-data.tgz -C /data .
-docker run --rm -v video-social-bot_app-storage:/storage -v "$PWD/backups:/backup" alpine tar czf /backup/app-storage.tgz -C /storage .
+./scripts/backup.sh
 ```
+
+This creates:
+
+```text
+backups/video-social-bot-YYYYMMDDTHHMMSSZ/
+├── app-data.tgz
+├── app-storage.tgz
+└── manifest.txt
+```
+
+Restore a backup:
+
+```bash
+docker compose down
+./scripts/restore.sh backups/video-social-bot-YYYYMMDDTHHMMSSZ
+docker compose up -d
+```
+
+Automated daily backup example:
+
+```cron
+15 3 * * * cd /opt/video-social-bot && ./scripts/backup.sh >> /var/log/video-social-bot-backup.log 2>&1
+```
+
+Copy backups off the VPS regularly, for example with `rsync` or your hosting provider snapshots.
 
 ## 8. Reverse proxy
 
